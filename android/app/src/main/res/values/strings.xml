@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SplitShare</string>
+    <string name="title_activity_main">SplitShare</string>
+    <string name="package_name">com.splitshare.app</string>
+    <string name="custom_url_scheme">com.splitshare.app</string>
+</resources>
