@@ -1,23 +1,16 @@
 name: Build Android APK
 
+# Trigger ONLY when manually clicked via GitHub Actions ("Run workflow")
 on:
   workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Build Type (debug / release)'
-        required: true
-        default: 'debug'
-        type: choice
-        options:
-          - debug
-          - release
-  push:
-    branches: [ main, master ]
 
 jobs:
   build:
     name: Generate SplitShare APK
     runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: 📥 Checkout Repository
@@ -26,31 +19,33 @@ jobs:
       - name: ☕ Setup Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
-
-      - name: 📱 Setup Android SDK Tools
-        uses: android-actions/setup-android@v3
 
       - name: 🟢 Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
-      - name: 📦 Install Node Dependencies
+      - name: 📦 Install Dependencies
         run: npm install
 
       - name: 🌐 Compile Web Application
         run: npm run build
 
-      - name: 🔄 Sync Assets with Capacitor Android
+      - name: 🔄 Sync Capacitor Android
         run: npx cap sync android
+
+      - name: 📱 Accept Android SDK Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: 🔨 Build APK with Gradle
         working-directory: ./android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
 
       - name: 📁 Prepare APK Output File
         run: |
