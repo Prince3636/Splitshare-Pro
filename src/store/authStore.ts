@@ -2,64 +2,9 @@ import { useState, useEffect } from 'react';
 import { UserAccount, UPIAccount } from '../types';
 import { fetchState, connectWebSocket, apiSignUp, apiSignIn, apiUpdateAccount } from '../utils/api';
 
-const SESSION_STORAGE_KEY = 'splitshare_auth_session_v3';
+const SESSION_STORAGE_KEY = 'splitshare_auth_session_v4';
 
-const DEFAULT_INITIAL_ACCOUNTS: UserAccount[] = [
-  {
-    id: 'u_rahul',
-    username: 'rahul',
-    email: 'rahul@example.com',
-    password: 'password123',
-    name: 'Rahul Sharma',
-    avatar: '👨‍💻',
-    upiId: 'rahul@okhdfcbank',
-    phone: '+91 98765 43210',
-    upiAccounts: [
-      {
-        id: 'upi_1',
-        label: 'Google Pay (HDFC)',
-        upiId: 'rahul@okhdfcbank',
-        isDefault: true,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'upi_2',
-        label: 'Paytm Wallet & Bank',
-        upiId: 'rahul@paytm',
-        isDefault: false,
-        createdAt: new Date().toISOString(),
-      },
-    ],
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'u_aman',
-    username: 'aman',
-    email: 'aman@example.com',
-    password: 'password123',
-    name: 'Aman Gupta',
-    avatar: '😎',
-    upiId: 'aman@paytm',
-    phone: '+91 98765 43211',
-    upiAccounts: [
-      {
-        id: 'upi_3',
-        label: 'Paytm Primary',
-        upiId: 'aman@paytm',
-        isDefault: true,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'upi_4',
-        label: 'PhonePe (SBI)',
-        upiId: 'aman@ybl',
-        isDefault: false,
-        createdAt: new Date().toISOString(),
-      },
-    ],
-    createdAt: new Date().toISOString(),
-  },
-];
+const DEFAULT_INITIAL_ACCOUNTS: UserAccount[] = [];
 
 export function useAuthStore() {
   const loadCurrentUserId = (): string => {
@@ -69,7 +14,7 @@ export function useAuthStore() {
     } catch (e) {
       console.error(e);
     }
-    return DEFAULT_INITIAL_ACCOUNTS[0].id;
+    return '';
   };
 
   const [accounts, setAccounts] = useState<UserAccount[]>(DEFAULT_INITIAL_ACCOUNTS);
@@ -97,13 +42,17 @@ export function useAuthStore() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(SESSION_STORAGE_KEY, currentUserId);
+      if (currentUserId) {
+        localStorage.setItem(SESSION_STORAGE_KEY, currentUserId);
+      } else {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+      }
     } catch (e) {
       console.error(e);
     }
   }, [currentUserId]);
 
-  const currentAccount = accounts.find((a) => a.id === currentUserId) || accounts[0] || null;
+  const currentAccount = accounts.find((a) => a.id === currentUserId) || null;
 
   const signUp = (data: {
     username: string;
@@ -170,14 +119,17 @@ export function useAuthStore() {
     password: string
   ): { success: boolean; error?: string; account?: UserAccount } => {
     const query = emailOrUsername.trim().toLowerCase();
+    const cleanPhone = query.replace(/[\s+-]/g, '');
     const found = accounts.find(
       (a) =>
-        (a.username.toLowerCase() === query || a.email.toLowerCase() === query) &&
+        (a.username.toLowerCase() === query ||
+          a.email.toLowerCase() === query ||
+          (a.phone && a.phone.replace(/[\s+-]/g, '') === cleanPhone)) &&
         a.password === password
     );
 
     if (!found) {
-      return { success: false, error: 'Invalid username/email or password.' };
+      return { success: false, error: 'Invalid credentials. Please check your username/email/mobile or password.' };
     }
 
     setCurrentUserId(found.id);

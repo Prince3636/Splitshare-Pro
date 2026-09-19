@@ -18,62 +18,7 @@ if (!fs.existsSync(DATA_DIR)) {
 
 // Initial seed accounts if database doesn't exist
 const INITIAL_DATA = {
-  accounts: [
-    {
-      id: 'u_rahul',
-      username: 'rahul',
-      email: 'rahul@example.com',
-      password: 'password123',
-      name: 'Rahul Sharma',
-      avatar: '👨‍💻',
-      upiId: 'rahul@okhdfcbank',
-      phone: '+91 98765 43210',
-      upiAccounts: [
-        {
-          id: 'upi_1',
-          label: 'Google Pay (HDFC)',
-          upiId: 'rahul@okhdfcbank',
-          isDefault: true,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 'upi_2',
-          label: 'Paytm Wallet & Bank',
-          upiId: 'rahul@paytm',
-          isDefault: false,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'u_aman',
-      username: 'aman',
-      email: 'aman@example.com',
-      password: 'password123',
-      name: 'Aman Gupta',
-      avatar: '😎',
-      upiId: 'aman@paytm',
-      phone: '+91 98765 43211',
-      upiAccounts: [
-        {
-          id: 'upi_3',
-          label: 'Paytm Primary',
-          upiId: 'aman@paytm',
-          isDefault: true,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 'upi_4',
-          label: 'PhonePe (SBI)',
-          upiId: 'aman@ybl',
-          isDefault: false,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-      createdAt: new Date().toISOString(),
-    },
-  ],
+  accounts: [],
   groups: [],
   expenses: [],
   settlements: [],

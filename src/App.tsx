@@ -19,6 +19,7 @@ import { DisputeModal } from './components/Modals/DisputeModal';
 import { InviteEmailModal } from './components/Modals/InviteEmailModal';
 import { NotificationsDrawer } from './components/Modals/NotificationsDrawer';
 import { AuthModal } from './components/Auth/AuthModal';
+import { AuthScreen } from './components/Auth/AuthScreen';
 import { FloatingAlert } from './components/Common/FloatingAlert';
 
 import { ArrowLeft } from 'lucide-react';
@@ -30,6 +31,7 @@ export const App: React.FC = () => {
     currentAccount,
     signUp,
     signIn,
+    signOut,
     switchAccount,
     updateAccount,
     addUPIAccount,
@@ -144,6 +146,11 @@ export const App: React.FC = () => {
     ? groups.find((g) => g.id === selectedGroup.id) || null
     : null;
 
+  // If no account is logged in, show the clean Login & Sign Up screen first (zero demo data)
+  if (!currentAccount) {
+    return <AuthScreen onSignIn={signIn} onSignUp={signUp} />;
+  }
+
   return (
     <div className="min-h-screen min-h-[100dvh] bg-slate-100 flex justify-center text-slate-900 selection:bg-emerald-500 selection:text-white">
       <div className="w-full max-w-md min-h-screen min-h-[100dvh] bg-slate-50 flex flex-col shadow-2xl relative border-x border-slate-200 overflow-x-hidden">
@@ -165,6 +172,7 @@ export const App: React.FC = () => {
           onOpenAuth={() => setIsAuthOpen(true)}
           onOpenNotifications={() => setIsNotificationsOpen(true)}
           onResetData={clearAllData}
+          onSignOut={signOut}
           pendingApprovalsCount={pendingApprovalsCount}
           unreadNotificationsCount={unreadNotificationsCount}
         />
@@ -274,6 +282,7 @@ export const App: React.FC = () => {
               onSelectUser={switchAccount}
               onUpdateProfile={updateAccount}
               onClearAllData={clearAllData}
+              onSignOut={signOut}
               onAddUPIAccount={addUPIAccount}
               onDeleteUPIAccount={deleteUPIAccount}
               onSetDefaultUPIAccount={setDefaultUPIAccount}

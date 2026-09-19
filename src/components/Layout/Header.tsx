@@ -1,6 +1,6 @@
 import React from 'react';
 import { Member, UserAccount } from '../../types';
-import { RotateCcw, ChevronDown, CheckCircle2, Bell, User, LogIn, UserPlus } from 'lucide-react';
+import { RotateCcw, ChevronDown, CheckCircle2, Bell, User, LogIn, UserPlus, LogOut } from 'lucide-react';
 
 interface HeaderProps {
   currentUser: Member;
@@ -10,6 +10,7 @@ interface HeaderProps {
   onOpenAuth: () => void;
   onOpenNotifications: () => void;
   onResetData: () => void;
+  onSignOut?: () => void;
   pendingApprovalsCount: number;
   unreadNotificationsCount: number;
 }
@@ -22,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAuth,
   onOpenNotifications,
   onResetData,
+  onSignOut,
   pendingApprovalsCount,
   unreadNotificationsCount,
 }) => {
@@ -141,6 +143,22 @@ export const Header: React.FC<HeaderProps> = ({
                       Log In or Create New Account
                     </button>
                   </div>
+
+                  {/* Log Out */}
+                  {onSignOut && (
+                    <div className="border-t border-slate-100 pt-1">
+                      <button
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          onSignOut();
+                        }}
+                        className="w-full px-3 py-2 flex items-center gap-2 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition-colors"
+                      >
+                        <LogOut size={14} className="text-slate-500" />
+                        Log Out ({currentUser.name})
+                      </button>
+                    </div>
+                  )}
 
                   {/* Clear all data */}
                   <div className="border-t border-slate-100 pt-1">

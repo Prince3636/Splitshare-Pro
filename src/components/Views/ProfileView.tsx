@@ -17,7 +17,8 @@ import {
   Star, 
   Smartphone,
   Maximize2,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
 
 interface ProfileViewProps {
@@ -29,6 +30,7 @@ interface ProfileViewProps {
   onSelectUser: (memberId: string) => void;
   onUpdateProfile: (updates: Partial<Member>) => void;
   onClearAllData: () => void;
+  onSignOut?: () => void;
   onAddUPIAccount?: (data: {
     label: string;
     upiId: string;
@@ -48,6 +50,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onSelectUser,
   onUpdateProfile,
   onClearAllData,
+  onSignOut,
   onAddUPIAccount,
   onDeleteUPIAccount,
   onSetDefaultUPIAccount,
@@ -576,6 +579,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Log Out button */}
+      {onSignOut && (
+        <div className="pt-2">
+          <button
+            onClick={onSignOut}
+            className="w-full py-2.5 px-4 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-xs"
+          >
+            <LogOut size={14} className="text-slate-600" />
+            Log Out ({currentUser.name})
+          </button>
         </div>
       )}
 
