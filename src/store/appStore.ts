@@ -140,6 +140,28 @@ export function useAppStore(currentAccount: UserAccount | null) {
       inv.invitedEmail.toLowerCase() === currentUser.email.toLowerCase()
   );
 
+  const myGroupIds = new Set(myGroups.map((g) => g.id));
+
+  // Strictly filter expenses for groups current user is a member of
+  const myExpenses: Expense[] = (state.expenses || []).filter((e: Expense) =>
+    myGroupIds.has(e.groupId)
+  );
+
+  // Strictly filter settlements for groups current user is a member of or where user is debtor/creditor
+  const mySettlements: Settlement[] = (state.settlements || []).filter(
+    (s: Settlement) =>
+      myGroupIds.has(s.groupId) || s.fromMemberId === currentUser.id || s.toMemberId === currentUser.id
+  );
+
+  // Strictly filter kitty contributions & expenses
+  const myKittyContributions: KittyContribution[] = (state.kittyContributions || []).filter(
+    (k: KittyContribution) => myGroupIds.has(k.groupId)
+  );
+
+  const myKittyExpenses: KittyExpense[] = (state.kittyExpenses || []).filter(
+    (ke: KittyExpense) => myGroupIds.has(ke.groupId)
+  );
+
   const createGroup = (groupData: Omit<Group, 'id' | 'createdAt' | 'createdBy'>) => {
     let members = [...groupData.members];
     if (!members.some((m) => m.id === currentUser.id)) {
@@ -464,14 +486,14 @@ export function useAppStore(currentAccount: UserAccount | null) {
     pendingInvites: myPendingInvites,
     notifications: myNotifications,
     markAllNotificationsRead,
-    expenses: (state.expenses || []) as Expense[],
+    expenses: myExpenses,
     addExpense,
     sendReRequestReminder,
     respondToApproval,
-    settlements: (state.settlements || []) as Settlement[],
+    settlements: mySettlements,
     recordSettlement,
-    kittyContributions: (state.kittyContributions || []) as KittyContribution[],
-    kittyExpenses: (state.kittyExpenses || []) as KittyExpense[],
+    kittyContributions: myKittyContributions,
+    kittyExpenses: myKittyExpenses,
     addKittyContribution,
     addKittyExpense,
     clearAllData,

@@ -41,21 +41,29 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: 🔨 Build APK with Gradle
+      - name: 🔨 Build APK & Play Console AAB Bundle with Gradle
         working-directory: ./android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug bundleDebug --no-daemon
 
-      - name: 📁 Prepare APK Output File
+      - name: 📁 Prepare Output Files
         run: |
           mkdir -p release-output
           cp android/app/build/outputs/apk/debug/app-debug.apk release-output/SplitShare.apk
+          cp android/app/build/outputs/bundle/debug/app-debug.aab release-output/SplitShare-PlayConsole.aab
           ls -la release-output
 
-      - name: 🚀 Upload SplitShare.apk as Downloadable Artifact
+      - name: 🚀 Upload SplitShare Installable APK
         uses: actions/upload-artifact@v4
         with:
           name: SplitShare-APK
           path: release-output/SplitShare.apk
+          retention-days: 30
+
+      - name: 📦 Upload SplitShare Google Play Console Bundle (.aab)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SplitShare-PlayConsole-AAB
+          path: release-output/SplitShare-PlayConsole.aab
           retention-days: 30

@@ -32,6 +32,7 @@ export const App: React.FC = () => {
     signUp,
     signIn,
     signOut,
+    setLoggedInAccount,
     switchAccount,
     updateAccount,
     addUPIAccount,
@@ -148,7 +149,7 @@ export const App: React.FC = () => {
 
   // If no account is logged in, show the clean Login & Sign Up screen first (zero demo data)
   if (!currentAccount) {
-    return <AuthScreen onSignIn={signIn} onSignUp={signUp} />;
+    return <AuthScreen onSignIn={signIn} onSignUp={signUp} onSetAccount={setLoggedInAccount} />;
   }
 
   return (
@@ -235,6 +236,7 @@ export const App: React.FC = () => {
                 currentUser={currentUser}
                 expenses={expenses}
                 settlements={settlements}
+                notifications={notifications}
                 onSelectGroup={(g) => setSelectedGroup(g)}
                 onOpenCreateGroup={() => setIsCreateGroupOpen(true)}
               />

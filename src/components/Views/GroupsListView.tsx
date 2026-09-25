@@ -1,14 +1,15 @@
 import React from 'react';
-import { Group, Member, Expense, Settlement } from '../../types';
+import { Group, Member, Expense, Settlement, AppNotification } from '../../types';
 import { calculateBalances } from '../../utils/debtSimplifier';
 import { formatCurrency } from '../../utils/formatters';
-import { Plus, ChevronRight, UserPlus, Sparkles, Receipt } from 'lucide-react';
+import { Plus, ChevronRight, UserPlus, Sparkles, Receipt, AlertCircle, Bell } from 'lucide-react';
 
 interface GroupsListViewProps {
   groups: Group[];
   currentUser: Member;
   expenses: Expense[];
   settlements: Settlement[];
+  notifications?: AppNotification[];
   onSelectGroup: (group: Group) => void;
   onOpenCreateGroup: () => void;
 }
@@ -18,6 +19,7 @@ export const GroupsListView: React.FC<GroupsListViewProps> = ({
   currentUser,
   expenses,
   settlements,
+  notifications = [],
   onSelectGroup,
   onOpenCreateGroup,
 }) => {
@@ -87,25 +89,56 @@ export const GroupsListView: React.FC<GroupsListViewProps> = ({
             );
 
             const myBalance = netBalances[currentUser.id] || 0;
-            const pendingCount = groupExpenses.filter((e) => e.status === 'PENDING_APPROVAL').length;
+            const pendingForMe = groupExpenses.filter(
+              (e) =>
+                e.status === 'PENDING_APPROVAL' &&
+                e.approvals?.[currentUser.id]?.status === 'PENDING'
+            ).length;
+            const unreadGroupNotifs = (notifications || []).filter(
+              (n) => n.groupId === group.id && !n.read
+            ).length;
 
             return (
               <div
                 key={group.id}
                 onClick={() => onSelectGroup(group)}
-                className="bg-white rounded-2xl p-4 border border-slate-200/80 hover:border-slate-300 shadow-xs hover:shadow-md transition-all cursor-pointer space-y-3 active:scale-[0.99]"
+                className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer space-y-3 active:scale-[0.99] ${
+                  pendingForMe > 0
+                    ? 'border-rose-200 shadow-sm shadow-rose-500/10 hover:border-rose-300'
+                    : unreadGroupNotifs > 0
+                    ? 'border-emerald-200 shadow-sm shadow-emerald-500/10 hover:border-emerald-300'
+                    : 'border-slate-200/80 hover:border-slate-300 shadow-xs hover:shadow-md'
+                }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl p-2 bg-slate-100 rounded-xl">{group.emoji}</span>
+                    <div className="relative">
+                      <span className="text-2xl p-2.5 bg-slate-100 rounded-2xl block">{group.emoji}</span>
+                      {pendingForMe > 0 ? (
+                        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500 border-2 border-white"></span>
+                        </span>
+                      ) : unreadGroupNotifs > 0 ? (
+                        <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 border-2 border-white"></span>
+                        </span>
+                      ) : null}
+                    </div>
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                      <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
                         {group.name}
-                        {pendingCount > 0 && (
-                          <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.2 rounded-full">
-                            {pendingCount} pending
+                        {pendingForMe > 0 ? (
+                          <span className="text-[10px] bg-rose-100 text-rose-800 font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 border border-rose-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                            {pendingForMe} need{pendingForMe === 1 ? 's' : ''} your approval
                           </span>
-                        )}
+                        ) : unreadGroupNotifs > 0 ? (
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            New Activity
+                          </span>
+                        ) : null}
                       </h3>
                       <p className="text-xs text-slate-400 mt-0.5">
                         {group.members.length} members • {groupExpenses.length} expenses

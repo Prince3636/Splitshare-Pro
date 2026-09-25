@@ -136,8 +136,19 @@ export function useAuthStore() {
     return { success: true, account: found };
   };
 
+  const setLoggedInAccount = (account: UserAccount) => {
+    setAccounts((prev) => {
+      const exists = prev.some((a) => a.id === account.id);
+      return exists ? prev.map((a) => (a.id === account.id ? { ...a, ...account } : a)) : [account, ...prev];
+    });
+    setCurrentUserId(account.id);
+  };
+
   const signOut = () => {
     setCurrentUserId('');
+    try {
+      import('../services/firebase').then(({ signOutFirebase }) => signOutFirebase());
+    } catch (e) {}
   };
 
   const switchAccount = (userId: string) => {
@@ -222,6 +233,7 @@ export function useAuthStore() {
     signUp,
     signIn,
     signOut,
+    setLoggedInAccount,
     switchAccount,
     updateAccount,
     addUPIAccount,

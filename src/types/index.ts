@@ -17,13 +17,15 @@ export interface UserAccount {
   id: string;
   username: string;
   email: string;
-  password: string;
+  password?: string;
   name: string;
   avatar: string;
   color?: string;
   upiId?: string;
   upiAccounts?: UPIAccount[];
   phone?: string;
+  emailVerified?: boolean;
+  authProvider?: 'password' | 'google' | 'phone';
   createdAt: string;
 }
 

@@ -341,6 +341,7 @@ app.post('/api/expenses', (req, res) => {
   const approvals: Record<string, any> = {};
   const newNotifs: any[] = [];
 
+  const group = db.groups.find((g: any) => g.id === expenseData.groupId);
   const payer = db.accounts.find((a: any) => a.id === expenseData.paidById);
   const payerName = payer?.name || 'Someone';
 
@@ -357,7 +358,24 @@ app.post('/api/expenses', (req, res) => {
           recipientUserId: s.memberId,
           type: 'BILL_APPROVAL',
           title: 'New Bill Awaiting Approval 🧾',
-          message: `${payerName} split "${expenseData.title}" (Your share: ₹${s.amount.toFixed(0)})`,
+          message: `${payerName} split "${expenseData.title}" in ${group?.name || 'group'} (Your share: ₹${s.amount.toFixed(0)})`,
+          groupId: expenseData.groupId,
+          relatedId: 'e_' + Date.now(),
+          createdAt: new Date().toISOString(),
+          read: false,
+        });
+      }
+    });
+  } else if (group?.members) {
+    // Confirmed bill: notify only members of this specific group
+    group.members.forEach((m: any) => {
+      if (m.id !== expenseData.paidById) {
+        newNotifs.push({
+          id: 'notif_exp_' + Date.now() + '_' + m.id,
+          recipientUserId: m.id,
+          type: 'BILL_ADDED',
+          title: 'New Bill Added 🧾',
+          message: `${payerName} added "${expenseData.title}" in ${group.name}`,
           groupId: expenseData.groupId,
           relatedId: 'e_' + Date.now(),
           createdAt: new Date().toISOString(),
@@ -390,6 +408,9 @@ app.post('/api/expenses/:id/respond', (req, res) => {
   const expense = db.expenses.find((e: any) => e.id === id);
   if (!expense) return res.status(404).json({ success: false, error: 'Expense not found.' });
 
+  const responder = db.accounts.find((a: any) => a.id === memberId);
+  const responderName = responder?.name || 'A member';
+
   expense.approvals = expense.approvals || {};
   expense.approvals[memberId] = {
     memberId,
@@ -406,6 +427,23 @@ app.post('/api/expenses/:id/respond', (req, res) => {
     expense.status = 'PENDING_APPROVAL';
   } else if (allAccepted) {
     expense.status = 'CONFIRMED';
+  }
+
+  // Notify the bill payer about the response
+  if (expense.paidById && expense.paidById !== memberId) {
+    db.notifications.unshift({
+      id: 'notif_resp_' + Date.now(),
+      recipientUserId: expense.paidById,
+      type: status === 'ACCEPTED' ? 'APPROVAL_ACCEPTED' : 'BILL_DISPUTED',
+      title: status === 'ACCEPTED' ? 'Share Accepted ✅' : 'Bill Disputed ⚠️',
+      message: status === 'ACCEPTED'
+        ? `${responderName} accepted their share of ₹${expense.splits.find((s: any) => s.memberId === memberId)?.amount.toFixed(0) || ''} for "${expense.title}"`
+        : `${responderName} disputed "${expense.title}": ${queryNote || 'Needs discussion'}`,
+      groupId: expense.groupId,
+      relatedId: expense.id,
+      createdAt: new Date().toISOString(),
+      read: false,
+    });
   }
 
   saveDatabase();
@@ -457,6 +495,25 @@ app.post('/api/settlements', (req, res) => {
     date: new Date().toISOString(),
     confirmed: true,
   };
+
+  const group = db.groups.find((g: any) => g.id === settlementData.groupId);
+  const payer = db.accounts.find((a: any) => a.id === settlementData.debtorId);
+  const payerName = payer?.name || 'Someone';
+
+  if (settlementData.creditorId) {
+    const notif = {
+      id: 'notif_set_' + Date.now(),
+      recipientUserId: settlementData.creditorId,
+      type: 'SETTLEMENT',
+      title: 'Payment Received / Settled 💸',
+      message: `${payerName} recorded a ₹${Number(settlementData.amount).toFixed(0)} settlement in ${group?.name || 'group'}`,
+      groupId: settlementData.groupId,
+      relatedId: newSettlement.id,
+      createdAt: new Date().toISOString(),
+      read: false,
+    };
+    db.notifications.unshift(notif);
+  }
 
   db.settlements.unshift(newSettlement);
   saveDatabase();
