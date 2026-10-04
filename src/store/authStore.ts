@@ -61,6 +61,7 @@ export function useAuthStore() {
     name: string;
     upiId?: string;
     phone?: string;
+    avatar?: string;
   }): { success: boolean; error?: string; account?: UserAccount } => {
     const cleanUsername = data.username.trim().toLowerCase();
     const cleanEmail = data.email.trim().toLowerCase();
@@ -83,22 +84,24 @@ export function useAuthStore() {
       });
     }
 
+    // Never keep plain-text password in client memory / state
     const localNewAccount: UserAccount = {
       id: 'u_' + Date.now(),
       username: cleanUsername,
       email: cleanEmail,
-      password: data.password,
       name: data.name.trim(),
-      avatar: '😎',
+      avatar: data.avatar || '😎',
       upiId: data.upiId?.trim() || undefined,
       phone: data.phone?.trim() || undefined,
       upiAccounts: initialUpiAccounts,
       createdAt: new Date().toISOString(),
     };
 
-    // Broadcast to server
+    // Send to backend for bcrypt hashing and persistent database save
     apiSignUp({
       ...data,
+      username: cleanUsername,
+      email: cleanEmail,
       upiAccounts: initialUpiAccounts,
     })
       .then((res) => {
@@ -114,26 +117,23 @@ export function useAuthStore() {
     return { success: true, account: localNewAccount };
   };
 
-  const signIn = (
+  const signIn = async (
     emailOrUsername: string,
     password: string
-  ): { success: boolean; error?: string; account?: UserAccount } => {
-    const query = emailOrUsername.trim().toLowerCase();
-    const cleanPhone = query.replace(/[\s+-]/g, '');
-    const found = accounts.find(
-      (a) =>
-        (a.username.toLowerCase() === query ||
-          a.email.toLowerCase() === query ||
-          (a.phone && a.phone.replace(/[\s+-]/g, '') === cleanPhone)) &&
-        a.password === password
-    );
-
-    if (!found) {
-      return { success: false, error: 'Invalid credentials. Please check your username/email/mobile or password.' };
+  ): Promise<{ success: boolean; error?: string; account?: UserAccount }> => {
+    try {
+      const res = await apiSignIn(emailOrUsername, password);
+      if (res?.success && res?.account) {
+        setLoggedInAccount(res.account);
+        return { success: true, account: res.account };
+      }
+      return {
+        success: false,
+        error: res?.error || 'Invalid credentials. Please check your username/email/mobile or password.',
+      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Error connecting to authentication service.' };
     }
-
-    setCurrentUserId(found.id);
-    return { success: true, account: found };
   };
 
   const setLoggedInAccount = (account: UserAccount) => {

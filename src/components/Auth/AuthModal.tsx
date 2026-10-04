@@ -13,11 +13,11 @@ interface AuthModalProps {
     password: string;
     name: string;
     upiId?: string;
-  }) => { success: boolean; error?: string };
+  }) => Promise<{ success: boolean; error?: string }> | { success: boolean; error?: string };
   onSignIn: (
     emailOrUsername: string,
     password: string
-  ) => { success: boolean; error?: string };
+  ) => Promise<{ success: boolean; error?: string }> | { success: boolean; error?: string };
   onSwitchAccount: (userId: string) => void;
 }
 
@@ -47,10 +47,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSignInSubmit = (e: React.FormEvent) => {
+  const handleSignInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    const res = onSignIn(loginIdentifier, loginPassword);
+    const res = await onSignIn(loginIdentifier, loginPassword);
     if (!res.success) {
       setErrorMsg(res.error || 'Failed to sign in.');
     } else {
@@ -58,14 +58,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleSignUpSubmit = (e: React.FormEvent) => {
+  const handleSignUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     if (!username.trim() || !email.trim() || !password || !name.trim()) {
       setErrorMsg('Please fill in all required fields.');
       return;
     }
-    const res = onSignUp({
+    const res = await onSignUp({
       username,
       email,
       password,

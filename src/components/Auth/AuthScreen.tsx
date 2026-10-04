@@ -29,7 +29,7 @@ interface AuthScreenProps {
   onSignIn: (
     identifier: string,
     pass: string
-  ) => { success: boolean; error?: string; account?: UserAccount };
+  ) => Promise<{ success: boolean; error?: string; account?: UserAccount }> | { success: boolean; error?: string; account?: UserAccount };
   onSignUp: (data: {
     username: string;
     email: string;
@@ -38,7 +38,7 @@ interface AuthScreenProps {
     phone?: string;
     upiId?: string;
     avatar?: string;
-  }) => { success: boolean; error?: string; account?: UserAccount };
+  }) => Promise<{ success: boolean; error?: string; account?: UserAccount }> | { success: boolean; error?: string; account?: UserAccount };
   onSetAccount?: (account: UserAccount) => void;
 }
 
@@ -142,7 +142,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     }
 
     // Local / Backend Store sign-in
-    const res = onSignIn(loginIdentifier.trim(), loginPassword);
+    const res = await onSignIn(loginIdentifier.trim(), loginPassword);
     setLoading(false);
     if (!res.success) {
       setErrorMsg(res.error || 'Invalid credentials.');
@@ -195,7 +195,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     }
 
     // Default fast store signup
-    const res = onSignUp({
+    const res = await onSignUp({
       name: name.trim(),
       username: username.trim(),
       phone: phone.trim() || undefined,

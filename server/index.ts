@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
@@ -50,6 +51,40 @@ function saveDatabase() {
   }
 }
 
+// Helper to sanitize account objects (never expose password)
+function sanitizeAccount(account: any) {
+  if (!account) return account;
+  const { password, ...safe } = account;
+  return safe;
+}
+
+// Helper to sanitize entire database object for public/client delivery
+function sanitizeDatabase(data: any) {
+  return {
+    ...data,
+    accounts: (data.accounts || []).map(sanitizeAccount),
+  };
+}
+
+// Password verification with backward-compatible migration for legacy plain text passwords
+async function verifyAndMigratePassword(account: any, plainPassword: string): Promise<boolean> {
+  if (!account || !account.password) return false;
+
+  const isBcrypt = typeof account.password === 'string' && (account.password.startsWith('$') || account.password.startsWith('$'));
+  if (isBcrypt) {
+    return await bcrypt.compare(plainPassword, account.password);
+  }
+
+  // Plain-text migration: if password matches legacy plain text, upgrade to bcrypt on-the-fly
+  if (account.password === plainPassword) {
+    account.password = await bcrypt.hash(plainPassword, 10);
+    saveDatabase();
+    return true;
+  }
+
+  return false;
+}
+
 // Setup Express and HTTP server
 const app = express();
 app.use(cors());
@@ -58,11 +93,12 @@ app.use(express.json({ limit: '10mb' })); // Support custom barcode image upload
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
-// Real-time WebSocket Broadcast
+// Real-time WebSocket Broadcast (Always sanitized - zero password exposure)
 function broadcast(type: string, payload?: any) {
+  const safePayload = payload ? (payload === db ? sanitizeDatabase(db) : payload) : sanitizeDatabase(db);
   const message = JSON.stringify({
     type,
-    payload: payload || db,
+    payload: safePayload,
     timestamp: new Date().toISOString(),
   });
 
@@ -74,83 +110,130 @@ function broadcast(type: string, payload?: any) {
 }
 
 wss.on('connection', (ws) => {
-  // Send current state immediately upon connecting
-  ws.send(JSON.stringify({ type: 'INIT_STATE', payload: db }));
+  // Send sanitized state immediately upon connecting (never leak credentials)
+  ws.send(JSON.stringify({ type: 'INIT_STATE', payload: sanitizeDatabase(db) }));
 });
 
 // --- REST API ENDPOINTS ---
 
-// Get full current state
+// Get sanitized application state for public/client use
 app.get('/api/state', (req, res) => {
+  res.json({ success: true, data: sanitizeDatabase(db) });
+});
+
+// Admin Route: Full State (Requires explicit Server-Side Authorization for Central Admin)
+app.get('/api/admin/state', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const adminKey = req.headers['x-admin-key'];
+  const expectedKey = process.env.SPLITSHARE_ADMIN_SECRET || 'splitshare-admin-secure-key';
+
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : adminKey;
+  if (!token || token !== expectedKey) {
+    return res.status(403).json({ success: false, error: 'Unauthorized: Admin access required.' });
+  }
+
   res.json({ success: true, data: db });
 });
 
-// Auth: Sign Up
-app.post('/api/auth/signup', (req, res) => {
-  const { username, email, password, name, upiId, phone } = req.body;
-  const cleanUsername = username?.trim().toLowerCase();
-  const cleanEmail = email?.trim().toLowerCase();
+// Auth: Sign Up (Bcrypt Password Hashing & Sanitized Output)
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { username, email, password, name, upiId, phone } = req.body;
+    const cleanUsername = username?.trim().toLowerCase();
+    const cleanEmail = email?.trim().toLowerCase();
 
-  if (db.accounts.some((a: any) => a.username.toLowerCase() === cleanUsername)) {
-    return res.status(400).json({ success: false, error: 'Username already taken.' });
-  }
-  if (db.accounts.some((a: any) => a.email.toLowerCase() === cleanEmail)) {
-    return res.status(400).json({ success: false, error: 'Email already registered.' });
-  }
+    if (!cleanUsername || !cleanEmail || !password || !name?.trim()) {
+      return res.status(400).json({ success: false, error: 'Name, username, email, and password are required.' });
+    }
 
-  const avatarList = ['😀', '😎', '🚀', '🌟', '🎸', '⚽', '🎯', '🎨', '🍕', '🦁'];
-  const randomAvatar = avatarList[Math.floor(Math.random() * avatarList.length)];
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, error: 'Password must be at least 6 characters.' });
+    }
 
-  const initialUpiAccounts: any[] = [];
-  if (upiId?.trim()) {
-    initialUpiAccounts.push({
-      id: 'upi_' + Date.now(),
-      label: 'Primary UPI',
-      upiId: upiId.trim(),
-      isDefault: true,
+    if (db.accounts.some((a: any) => a.username.toLowerCase() === cleanUsername)) {
+      return res.status(400).json({ success: false, error: 'Username already taken.' });
+    }
+    if (db.accounts.some((a: any) => a.email.toLowerCase() === cleanEmail)) {
+      return res.status(400).json({ success: false, error: 'Email already registered.' });
+    }
+
+    const avatarList = ['😀', '😎', '🚀', '🌟', '🎸', '⚽', '🎯', '🎨', '🍕', '🦁'];
+    const randomAvatar = avatarList[Math.floor(Math.random() * avatarList.length)];
+
+    const initialUpiAccounts: any[] = [];
+    if (upiId?.trim()) {
+      initialUpiAccounts.push({
+        id: 'upi_' + Date.now(),
+        label: 'Primary UPI',
+        upiId: upiId.trim(),
+        isDefault: true,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    // Hash password with bcrypt before storing
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newAccount = {
+      id: 'u_' + Date.now(),
+      username: cleanUsername,
+      email: cleanEmail,
+      password: hashedPassword,
+      name: name.trim(),
+      avatar: randomAvatar,
+      upiId: upiId?.trim() || undefined,
+      phone: phone?.trim() || undefined,
+      upiAccounts: initialUpiAccounts,
       createdAt: new Date().toISOString(),
-    });
+    };
+
+    db.accounts.push(newAccount);
+    saveDatabase();
+    broadcast('STATE_UPDATED', db);
+
+    res.json({ success: true, account: sanitizeAccount(newAccount) });
+  } catch (err: any) {
+    console.error('Signup error:', err);
+    res.status(500).json({ success: false, error: 'Internal server error during signup.' });
   }
-
-  const newAccount = {
-    id: 'u_' + Date.now(),
-    username: cleanUsername,
-    email: cleanEmail,
-    password,
-    name: name.trim(),
-    avatar: randomAvatar,
-    upiId: upiId?.trim() || undefined,
-    phone: phone?.trim() || undefined,
-    upiAccounts: initialUpiAccounts,
-    createdAt: new Date().toISOString(),
-  };
-
-  db.accounts.push(newAccount);
-  saveDatabase();
-  broadcast('STATE_UPDATED', db);
-
-  res.json({ success: true, account: newAccount });
 });
 
-// Auth: Sign In
-app.post('/api/auth/signin', (req, res) => {
-  const { identifier, password } = req.body;
-  const query = identifier?.trim().toLowerCase();
+// Auth: Sign In (Bcrypt Verification & Automatic Migration)
+app.post('/api/auth/signin', async (req, res) => {
+  try {
+    const { identifier, password } = req.body;
+    if (!identifier || !password) {
+      return res.status(400).json({ success: false, error: 'Username/email/phone and password are required.' });
+    }
 
-  const found = db.accounts.find(
-    (a: any) =>
-      (a.username.toLowerCase() === query || a.email.toLowerCase() === query) &&
-      a.password === password
-  );
+    const query = identifier?.trim().toLowerCase();
+    const cleanPhone = query.replace(/[\s+-]/g, '');
 
-  if (!found) {
-    return res.status(401).json({ success: false, error: 'Invalid username/email or password.' });
+    const found = db.accounts.find(
+      (a: any) =>
+        a.username.toLowerCase() === query ||
+        a.email.toLowerCase() === query ||
+        (a.phone && a.phone.replace(/[\s+-]/g, '') === cleanPhone)
+    );
+
+    if (!found) {
+      return res.status(401).json({ success: false, error: 'Invalid username/email or password.' });
+    }
+
+    // Verify password via bcrypt (and upgrade legacy plain text transparently)
+    const isMatch = await verifyAndMigratePassword(found, password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, error: 'Invalid username/email or password.' });
+    }
+
+    res.json({ success: true, account: sanitizeAccount(found) });
+  } catch (err: any) {
+    console.error('Signin error:', err);
+    res.status(500).json({ success: false, error: 'Internal server error during signin.' });
   }
-
-  res.json({ success: true, account: found });
 });
 
-// Auth: Update Profile (Name, Phone, UPI IDs, Barcodes)
+// Auth: Update Profile (Name, Phone, UPI IDs, Barcodes - Never update password directly)
 app.post('/api/auth/update', (req, res) => {
   const { userId, updates } = req.body;
   const idx = db.accounts.findIndex((a: any) => a.id === userId);
@@ -159,7 +242,9 @@ app.post('/api/auth/update', (req, res) => {
     return res.status(404).json({ success: false, error: 'User not found.' });
   }
 
-  db.accounts[idx] = { ...db.accounts[idx], ...updates };
+  // Prevent accidental or malicious plain-text password overwrite via profile update
+  const { password: _p, ...safeUpdates } = updates || {};
+  db.accounts[idx] = { ...db.accounts[idx], ...safeUpdates };
 
   // Update in groups where this member is listed
   db.groups.forEach((g: any) => {
@@ -167,10 +252,10 @@ app.post('/api/auth/update', (req, res) => {
       if (m.id === userId) {
         return {
           ...m,
-          name: updates.name || m.name,
-          phone: updates.phone !== undefined ? updates.phone : m.phone,
-          upiId: updates.upiId !== undefined ? updates.upiId : m.upiId,
-          upiAccounts: updates.upiAccounts || m.upiAccounts,
+          name: safeUpdates.name || m.name,
+          phone: safeUpdates.phone !== undefined ? safeUpdates.phone : m.phone,
+          upiId: safeUpdates.upiId !== undefined ? safeUpdates.upiId : m.upiId,
+          upiAccounts: safeUpdates.upiAccounts || m.upiAccounts,
         };
       }
       return m;
@@ -180,7 +265,7 @@ app.post('/api/auth/update', (req, res) => {
   saveDatabase();
   broadcast('STATE_UPDATED', db);
 
-  res.json({ success: true, account: db.accounts[idx] });
+  res.json({ success: true, account: sanitizeAccount(db.accounts[idx]) });
 });
 
 // Groups: Create Group
@@ -566,7 +651,7 @@ app.post('/api/reset', (req, res) => {
 });
 
 // Start listening on port 3001
-const PORT = 3001;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 SplitShare Real-Time Server running on port ${PORT}`);
 });
