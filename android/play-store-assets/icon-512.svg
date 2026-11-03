@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#022c22" />
+    </linearGradient>
+
+    <!-- Card 1 Emerald Gradient -->
+    <linearGradient id="card1-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+
+    <!-- Card 2 Teal Gradient -->
+    <linearGradient id="card2-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14b8a6" />
+      <stop offset="100%" stop-color="#0d9488" />
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.4" />
+    </filter>
+  </defs>
+
+  <!-- Background Base (Squircle / Rounded Box for Play Store) -->
+  <rect width="512" height="512" rx="112" fill="url(#bg-grad)" />
+
+  <!-- Ambient Glow -->
+  <circle cx="256" cy="256" r="180" fill="#10b981" opacity="0.12" />
+
+  <!-- Group with Shadow -->
+  <g filter="url(#shadow)">
+    <!-- Back Card (Teal) -->
+    <rect x="220" y="150" width="180" height="230" rx="32" fill="url(#card2-grad)" transform="rotate(14 310 265)" opacity="0.95" />
+
+    <!-- Front Card (Emerald) -->
+    <rect x="120" y="150" width="180" height="230" rx="32" fill="url(#card1-grad)" transform="rotate(-12 210 265)" />
+  </g>
+
+  <!-- Crisp White Center Icon: Rupee & Split Indicator -->
+  <g fill="#ffffff">
+    <!-- Top Horizontal Bar -->
+    <rect x="176" y="200" width="100" height="18" rx="9" />
+    <!-- Second Horizontal Bar -->
+    <rect x="176" y="234" width="86" height="18" rx="9" />
+
+    <!-- Rupee Loop & Leg -->
+    <path d="M194,240 C234,240 256,254 256,282 C256,310 230,324 194,324 L180,324 L244,388 C250,394 246,404 236,404 C231,404 227,402 223,398 L160,334 C156,330 160,324 166,324 L194,324 C220,324 236,314 236,282 C236,252 214,240 186,240 Z" />
+    <!-- Vertical Spine -->
+    <rect x="176" y="200" width="18" height="130" rx="9" />
+  </g>
+
+  <!-- Checkmark Badge on Bottom Right -->
+  <circle cx="360" cy="356" r="42" fill="#10b981" stroke="#0f172a" stroke-width="8" />
+  <path d="M344,356 L356,368 L378,344" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

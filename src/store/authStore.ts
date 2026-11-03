@@ -1,60 +1,64 @@
 import { useState, useEffect } from 'react';
 import { UserAccount, UPIAccount } from '../types';
-import { fetchState, connectWebSocket, apiSignUp, apiSignIn, apiUpdateAccount } from '../utils/api';
+import {
+  fetchState,
+  connectWebSocket,
+  apiSignUp,
+  apiSignIn,
+  apiUpdateAccount,
+  apiDeleteAccount,
+  setStoredToken,
+  getStoredToken,
+} from '../utils/api';
 
-const SESSION_STORAGE_KEY = 'splitshare_auth_session_v4';
-
-const DEFAULT_INITIAL_ACCOUNTS: UserAccount[] = [];
+const ACCOUNT_STORAGE_KEY = 'splitshare_auth_account_v5';
 
 export function useAuthStore() {
-  const loadCurrentUserId = (): string => {
+  const loadInitialAccount = (): UserAccount | null => {
     try {
-      const saved = localStorage.getItem(SESSION_STORAGE_KEY);
-      if (saved) return saved;
+      const saved = localStorage.getItem(ACCOUNT_STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
     }
-    return '';
+    return null;
   };
 
-  const [accounts, setAccounts] = useState<UserAccount[]>(DEFAULT_INITIAL_ACCOUNTS);
-  const [currentUserId, setCurrentUserId] = useState<string>(loadCurrentUserId);
+  const [currentAccount, setCurrentAccount] = useState<UserAccount | null>(loadInitialAccount);
+  const [accounts, setAccounts] = useState<UserAccount[]>([]);
 
   useEffect(() => {
-    // Fetch accounts from server
+    const token = getStoredToken();
+    if (!token) return;
+
     fetchState()
       .then((res) => {
         if (res?.data?.accounts) {
           setAccounts(res.data.accounts);
+          const found = res.data.accounts.find((a: UserAccount) => a.id === currentAccount?.id);
+          if (found) {
+            setCurrentAccount(found);
+            localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(found));
+          }
         }
       })
       .catch(() => {});
 
-    // Listen for new user registrations and updates live via WebSocket!
     const cleanup = connectWebSocket((serverData) => {
       if (serverData?.accounts) {
         setAccounts(serverData.accounts);
+        const found = serverData.accounts.find((a: UserAccount) => a.id === currentAccount?.id);
+        if (found) {
+          setCurrentAccount(found);
+          localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(found));
+        }
       }
     });
 
     return cleanup;
   }, []);
 
-  useEffect(() => {
-    try {
-      if (currentUserId) {
-        localStorage.setItem(SESSION_STORAGE_KEY, currentUserId);
-      } else {
-        localStorage.removeItem(SESSION_STORAGE_KEY);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }, [currentUserId]);
-
-  const currentAccount = accounts.find((a) => a.id === currentUserId) || null;
-
-  const signUp = (data: {
+  const signUp = async (data: {
     username: string;
     email: string;
     password: string;
@@ -62,59 +66,29 @@ export function useAuthStore() {
     upiId?: string;
     phone?: string;
     avatar?: string;
-  }): { success: boolean; error?: string; account?: UserAccount } => {
-    const cleanUsername = data.username.trim().toLowerCase();
-    const cleanEmail = data.email.trim().toLowerCase();
+  }): Promise<{ success: boolean; error?: string; account?: UserAccount }> => {
+    try {
+      const cleanUsername = data.username.trim().toLowerCase();
+      const cleanEmail = data.email.trim().toLowerCase();
 
-    if (accounts.some((a) => a.username.toLowerCase() === cleanUsername)) {
-      return { success: false, error: 'Username is already taken.' };
-    }
-    if (accounts.some((a) => a.email.toLowerCase() === cleanEmail)) {
-      return { success: false, error: 'An account with this email already exists.' };
-    }
-
-    const initialUpiAccounts: UPIAccount[] = [];
-    if (data.upiId?.trim()) {
-      initialUpiAccounts.push({
-        id: 'upi_' + Date.now(),
-        label: 'Primary UPI',
-        upiId: data.upiId.trim(),
-        isDefault: true,
-        createdAt: new Date().toISOString(),
+      const res = await apiSignUp({
+        ...data,
+        username: cleanUsername,
+        email: cleanEmail,
       });
+
+      if (res?.success && res?.token && res?.account) {
+        setStoredToken(res.token);
+        setCurrentAccount(res.account);
+        setAccounts((prev) => [res.account, ...prev.filter((a) => a.id !== res.account.id)]);
+        localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(res.account));
+        return { success: true, account: res.account };
+      }
+
+      return { success: false, error: res?.error || 'Registration failed.' };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Network error during signup.' };
     }
-
-    // Never keep plain-text password in client memory / state
-    const localNewAccount: UserAccount = {
-      id: 'u_' + Date.now(),
-      username: cleanUsername,
-      email: cleanEmail,
-      name: data.name.trim(),
-      avatar: data.avatar || '😎',
-      upiId: data.upiId?.trim() || undefined,
-      phone: data.phone?.trim() || undefined,
-      upiAccounts: initialUpiAccounts,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Send to backend for bcrypt hashing and persistent database save
-    apiSignUp({
-      ...data,
-      username: cleanUsername,
-      email: cleanEmail,
-      upiAccounts: initialUpiAccounts,
-    })
-      .then((res) => {
-        if (res?.account) {
-          setCurrentUserId(res.account.id);
-        }
-      })
-      .catch(console.error);
-
-    setAccounts((prev) => [...prev, localNewAccount]);
-    setCurrentUserId(localNewAccount.id);
-
-    return { success: true, account: localNewAccount };
   };
 
   const signIn = async (
@@ -123,47 +97,71 @@ export function useAuthStore() {
   ): Promise<{ success: boolean; error?: string; account?: UserAccount }> => {
     try {
       const res = await apiSignIn(emailOrUsername, password);
-      if (res?.success && res?.account) {
-        setLoggedInAccount(res.account);
+      if (res?.success && res?.token && res?.account) {
+        setStoredToken(res.token);
+        setCurrentAccount(res.account);
+        setAccounts((prev) => [res.account, ...prev.filter((a) => a.id !== res.account.id)]);
+        localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(res.account));
         return { success: true, account: res.account };
       }
       return {
         success: false,
-        error: res?.error || 'Invalid credentials. Please check your username/email/mobile or password.',
+        error: res?.error || 'Invalid credentials. Please verify your details.',
       };
     } catch (e: any) {
       return { success: false, error: e?.message || 'Error connecting to authentication service.' };
     }
   };
 
-  const setLoggedInAccount = (account: UserAccount) => {
-    setAccounts((prev) => {
-      const exists = prev.some((a) => a.id === account.id);
-      return exists ? prev.map((a) => (a.id === account.id ? { ...a, ...account } : a)) : [account, ...prev];
-    });
-    setCurrentUserId(account.id);
-  };
-
   const signOut = () => {
-    setCurrentUserId('');
+    setStoredToken(null);
+    setCurrentAccount(null);
+    localStorage.removeItem(ACCOUNT_STORAGE_KEY);
     try {
       import('../services/firebase').then(({ signOutFirebase }) => signOutFirebase());
-    } catch (e) {}
+    } catch {}
   };
 
-  const switchAccount = (userId: string) => {
-    if (accounts.some((a) => a.id === userId)) {
-      setCurrentUserId(userId);
+  const deleteAccount = async (): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await apiDeleteAccount();
+      if (res?.success) {
+        signOut();
+        return { success: true };
+      }
+      return { success: false, error: res?.error || 'Failed to delete account.' };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Error during account deletion.' };
+    }
+  };
+
+  const setLoggedInAccount = (account: UserAccount) => {
+    setCurrentAccount(account);
+    setAccounts((prev) => [account, ...prev.filter((a) => a.id !== account.id)]);
+    localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(account));
+    if (account.token) {
+      setStoredToken(account.token);
+    }
+  };
+
+  const switchAccount = (accountId: string) => {
+    const acc = accounts.find((a) => a.id === accountId);
+    if (acc) {
+      setCurrentAccount(acc);
+      localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(acc));
+      if (acc.token) {
+        setStoredToken(acc.token);
+      }
     }
   };
 
   const updateAccount = (updates: Partial<UserAccount>) => {
-    if (currentAccount) {
-      apiUpdateAccount(currentAccount.id, updates).catch(console.error);
-    }
-    setAccounts((prev) =>
-      prev.map((acc) => (acc.id === currentUserId ? { ...acc, ...updates } : acc))
-    );
+    if (!currentAccount) return;
+    const updated = { ...currentAccount, ...updates };
+    setCurrentAccount(updated);
+    localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(updated));
+
+    apiUpdateAccount(currentAccount.id, updates).catch(console.error);
   };
 
   const addUPIAccount = (accountData: {
@@ -233,8 +231,9 @@ export function useAuthStore() {
     signUp,
     signIn,
     signOut,
-    setLoggedInAccount,
+    deleteAccount,
     switchAccount,
+    setLoggedInAccount,
     updateAccount,
     addUPIAccount,
     deleteUPIAccount,

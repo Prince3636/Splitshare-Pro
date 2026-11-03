@@ -1,3 +1,5 @@
+import QRCode from 'qrcode';
+
 /**
  * UPI deep link and QR code utilities for direct mobile payment
  */
@@ -19,8 +21,24 @@ export function generateUPILink({ upiId, payeeName, amount, note }: UPIParams): 
   return `upi://pay?pa=${cleanUPI}&pn=${cleanName}&am=${formattedAmount}&cu=INR&tn=${cleanNote}`;
 }
 
-export function generateUPIQRCodeUrl(params: UPIParams): string {
+/**
+ * Generate client-side offline QR code data URL (PNG/Base64)
+ * 100% private, zero network roundtrip, works offline and in airplane mode.
+ */
+export async function generateUPIQRCodeUrl(params: UPIParams): Promise<string> {
   const upiUri = generateUPILink(params);
-  // High-reliability QR Server API for fast instant rendering on mobile
-  return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiUri)}`;
+  try {
+    return await QRCode.toDataURL(upiUri, {
+      width: 280,
+      margin: 2,
+      color: {
+        dark: '#0f172a',
+        light: '#ffffff',
+      },
+      errorCorrectionLevel: 'M',
+    });
+  } catch (err) {
+    console.error('Error generating offline QR code:', err);
+    return '';
+  }
 }

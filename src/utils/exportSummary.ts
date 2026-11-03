@@ -39,19 +39,28 @@ export function generateGroupWhatsAppSummary({
   return text;
 }
 
+export function sanitizeCSVCell(value: string | number): string {
+  const str = String(value ?? '');
+  // Mitigate CSV Formula Injection (DDE attack): prefix cells starting with =, +, -, @, \t, \r
+  if (/^[=+\-@\t\r]/.test(str)) {
+    return `"'${str.replace(/"/g, '""')}"`;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
 export function downloadGroupCSV(group: Group, expenses: Expense[], allMembers: Member[]) {
   let csv = 'Date,Description,Category,Amount,Paid By,Split Mode,Status\n';
 
   expenses.forEach((e) => {
     const payer = allMembers.find((m) => m.id === e.paidById)?.name || 'Member';
     const row = [
-      `"${new Date(e.date).toLocaleDateString()}"`,
-      `"${e.title.replace(/"/g, '""')}"`,
-      `"${e.category}"`,
+      sanitizeCSVCell(new Date(e.date).toLocaleDateString()),
+      sanitizeCSVCell(e.title),
+      sanitizeCSVCell(e.category),
       e.amount,
-      `"${payer}"`,
-      `"${e.splitType}"`,
-      `"${e.status}"`,
+      sanitizeCSVCell(payer),
+      sanitizeCSVCell(e.splitType),
+      sanitizeCSVCell(e.status),
     ];
     csv += row.join(',') + '\n';
   });

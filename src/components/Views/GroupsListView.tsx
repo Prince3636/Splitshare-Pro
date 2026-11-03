@@ -23,13 +23,37 @@ export const GroupsListView: React.FC<GroupsListViewProps> = ({
   onSelectGroup,
   onOpenCreateGroup,
 }) => {
+  const groupMetrics = React.useMemo(() => {
+    const map: Record<string, { myBalance: number; pendingForMe: number; unreadGroupNotifs: number; expenseCount: number }> = {};
+    groups.forEach((group) => {
+      const groupExpenses = expenses.filter((e) => e.groupId === group.id);
+      const groupSettlements = settlements.filter((s) => s.groupId === group.id);
+      const { netBalances } = calculateBalances(
+        group.members.map((m) => m.id),
+        groupExpenses,
+        groupSettlements
+      );
+      const myBalance = netBalances[currentUser.id] || 0;
+      const pendingForMe = groupExpenses.filter(
+        (e) =>
+          e.status === 'PENDING_APPROVAL' &&
+          e.approvals?.[currentUser.id]?.status === 'PENDING'
+      ).length;
+      const unreadGroupNotifs = (notifications || []).filter(
+        (n) => n.groupId === group.id && !n.read
+      ).length;
+      map[group.id] = { myBalance, pendingForMe, unreadGroupNotifs, expenseCount: groupExpenses.length };
+    });
+    return map;
+  }, [groups, expenses, settlements, notifications, currentUser.id]);
+
   return (
     <div className="max-w-md mx-auto px-4 py-4 space-y-4 pb-28">
       {/* Top Banner */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Your Groups</h1>
-          <p className="text-xs text-slate-500 font-medium">Split bills, trips & flatmates expenses</p>
+          <p className="text-xs text-slate-500 font-medium">Track and split shared expenses</p>
         </div>
         <button
           onClick={onOpenCreateGroup}
@@ -40,63 +64,36 @@ export const GroupsListView: React.FC<GroupsListViewProps> = ({
         </button>
       </div>
 
-      {/* Group Cards List OR Friendly Empty State */}
+      {/* Group Cards List OR Clean Minimal Empty State */}
       {groups.length === 0 ? (
-        <div className="bg-white rounded-3xl p-6 text-center border border-slate-200 shadow-xs space-y-4 my-2">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-3xl mx-auto">
-            🏕️
+        <div className="bg-white rounded-3xl p-8 text-center border border-slate-200/80 shadow-xs space-y-4 my-2">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-2xl mx-auto shadow-inner">
+            👥
           </div>
-          <div>
-            <h3 className="text-base font-bold text-slate-900">Welcome to SplitShare!</h3>
-            <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1 leading-relaxed">
-              No groups added yet. Create a group for your upcoming trip, flatmates, or party and add your real friends!
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-slate-900">No groups yet</h3>
+            <p className="text-xs text-slate-500 max-w-xs mx-auto">
+              Create a group to start splitting bills and settling balances.
             </p>
-          </div>
-
-          <div className="bg-slate-50 rounded-2xl p-3.5 text-left border border-slate-200/80 space-y-2 text-xs">
-            <p className="font-bold text-slate-700">Quick steps to get started:</p>
-            <div className="flex items-center gap-2 text-slate-600">
-              <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 font-bold text-[10px] flex items-center justify-center">1</span>
-              <span>Create a group (e.g. "Goa Roadtrip", "Flat 302")</span>
-            </div>
-            <div className="flex items-center gap-2 text-slate-600">
-              <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 font-bold text-[10px] flex items-center justify-center">2</span>
-              <span>Add your friends' names and their UPI IDs</span>
-            </div>
-            <div className="flex items-center gap-2 text-slate-600">
-              <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 font-bold text-[10px] flex items-center justify-center">3</span>
-              <span>Start adding bills with Equal, Exact, or % splits!</span>
-            </div>
           </div>
 
           <button
             onClick={onOpenCreateGroup}
-            className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+            className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
           >
             <Plus size={16} />
-            Create Your First Group
+            Create Group
           </button>
         </div>
       ) : (
         <div className="space-y-3">
           {groups.map((group) => {
-            const groupExpenses = expenses.filter((e) => e.groupId === group.id);
-            const groupSettlements = settlements.filter((s) => s.groupId === group.id);
-            const { netBalances } = calculateBalances(
-              group.members.map((m) => m.id),
-              groupExpenses,
-              groupSettlements
-            );
-
-            const myBalance = netBalances[currentUser.id] || 0;
-            const pendingForMe = groupExpenses.filter(
-              (e) =>
-                e.status === 'PENDING_APPROVAL' &&
-                e.approvals?.[currentUser.id]?.status === 'PENDING'
-            ).length;
-            const unreadGroupNotifs = (notifications || []).filter(
-              (n) => n.groupId === group.id && !n.read
-            ).length;
+            const { myBalance, pendingForMe, unreadGroupNotifs, expenseCount } = groupMetrics[group.id] || {
+              myBalance: 0,
+              pendingForMe: 0,
+              unreadGroupNotifs: 0,
+              expenseCount: 0,
+            };
 
             return (
               <div
@@ -141,7 +138,7 @@ export const GroupsListView: React.FC<GroupsListViewProps> = ({
                         ) : null}
                       </h3>
                       <p className="text-xs text-slate-400 mt-0.5">
-                        {group.members.length} members • {groupExpenses.length} expenses
+                        {group.members.length} members • {expenseCount} expenses
                       </p>
                     </div>
                   </div>
@@ -175,7 +172,7 @@ export const GroupsListView: React.FC<GroupsListViewProps> = ({
                         ? 'text-emerald-600'
                         : myBalance < -0.01
                         ? 'text-rose-600'
-                        : 'text-slate-400 font-semibold'
+                        : 'text-slate-500 font-semibold'
                     }`}>
                       {myBalance > 0.01
                         ? `gets back ${formatCurrency(myBalance)}`

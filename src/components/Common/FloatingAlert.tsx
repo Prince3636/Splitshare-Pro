@@ -50,7 +50,7 @@ export const FloatingAlert: React.FC<FloatingAlertProps> = ({
                 ? `✉️ You have ${pendingInvitesCount} group invitation!`
                 : `🔔 ${pendingApprovalsCount} bill(s) awaiting your approval!`}
             </p>
-            <p className="text-[10px] text-slate-400 truncate">
+            <p className="text-[10px] text-slate-300 truncate">
               Tap to review and confirm your share
             </p>
           </div>

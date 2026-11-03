@@ -1,0 +1,38 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Outer Brand Glow / Subtle Accent Circle -->
+    <path
+        android:fillColor="#10b981"
+        android:fillAlpha="0.12"
+        android:pathData="M54,18 A36,36 0 1 0 54,90 A36,36 0 1 0 54,18 Z" />
+
+    <!-- Card 1: Top Left Split Card (Emerald gradient primary) -->
+    <path
+        android:fillColor="#10b981"
+        android:pathData="M34,34 L52,26 C54.5,24.8 57.5,26.2 58.2,28.8 L64,48 C64.7,50.5 63.3,53.2 60.8,54 L43,62 C40.5,63.1 37.5,61.7 36.8,59.2 L31,40 C30.3,37.5 31.7,34.8 34,34 Z" />
+
+    <!-- Card 2: Bottom Right Settled Card (Deep Teal overlay) -->
+    <path
+        android:fillColor="#059669"
+        android:pathData="M46,46 L64,38 C66.5,36.8 69.5,38.2 70.2,40.8 L76,60 C76.7,62.5 75.3,65.2 72.8,66 L55,74 C52.5,75.1 49.5,73.7 48.8,71.2 L43,52 C42.3,49.5 43.7,46.8 46,46 Z" />
+
+    <!-- Center Currency Symbol: Indian Rupee / Split Slash in Crisp White -->
+    <!-- Top Bar -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,40 L64,40 C65.1,40 66,39.1 66,38 C66,36.9 65.1,36 64,36 L44,36 C42.9,36 42,36.9 42,38 C42,39.1 42.9,40 44,40 Z" />
+
+    <!-- Second Bar -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,46 L60,46 C61.1,46 62,45.1 62,44 C62,42.9 61.1,42 60,42 L44,42 C42.9,42 42,42.9 42,44 C42,45.1 42.9,46 44,46 Z" />
+
+    <!-- Rupee Curve and Diagonal Leg -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M46,46 C52,46 56,48 56,53 C56,58 51,60 46,60 L44,60 C43,60 42.2,60.8 42.5,61.8 L53,74 C53.6,74.7 54.5,75 55.4,75 C56.6,75 57.5,73.8 56.8,72.6 L48,62 C55,61.5 60,57.5 60,52.5 C60,47 54,44 48,44 L44,44 L44,72 C44,73.1 43.1,74 42,74 C40.9,74 40,73.1 40,72 L40,38 C40,36.9 40.9,36 42,36 L46,36 L46,46 Z" />
+</vector>

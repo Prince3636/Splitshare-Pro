@@ -80,7 +80,12 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs transition-all">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Create New Group"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs transition-all"
+    >
       <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[90dvh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-6 duration-200">
         {/* Header */}
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/80">
@@ -90,9 +95,10 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200"
+            aria-label="Close create group dialog"
+            className="min-w-[48px] min-h-[48px] rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 
@@ -140,6 +146,8 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
             </label>
             <input
               type="number"
+              inputMode="numeric"
+              min="0"
               placeholder="e.g. 20000"
               value={targetBudgetStr}
               onChange={(e) => setTargetBudgetStr(e.target.value)}

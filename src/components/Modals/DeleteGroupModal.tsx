@@ -29,7 +29,12 @@ export const DeleteGroupModal: React.FC<DeleteGroupModalProps> = ({
   const isMatch = confirmName.trim().toLowerCase() === group.name.trim().toLowerCase();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-xs transition-all">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Delete Group"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-xs transition-all"
+    >
       <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] sm:pb-5 max-h-[90dvh] flex flex-col overflow-y-auto animate-in slide-in-from-bottom-6 duration-200">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2 text-rose-600">
@@ -40,9 +45,10 @@ export const DeleteGroupModal: React.FC<DeleteGroupModalProps> = ({
           </div>
           <button
             onClick={handleClose}
-            className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200"
+            aria-label="Close delete group dialog"
+            className="min-w-[48px] min-h-[48px] rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 

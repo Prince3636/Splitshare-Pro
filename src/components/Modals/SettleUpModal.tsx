@@ -50,6 +50,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
   const [selectedAccountId, setSelectedAccountId] = useState<string>(
     upiAccounts.find((u) => u.isDefault)?.id || upiAccounts[0]?.id || ''
   );
+  const [qrUrl, setQrUrl] = useState<string>('');
 
   useEffect(() => {
     if (upiAccounts.length > 0) {
@@ -58,23 +59,29 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
     }
   }, [creditor]);
 
-  if (!isOpen) return null;
-
   const selectedAccount = upiAccounts.find((u) => u.id === selectedAccountId) || upiAccounts[0];
   const activeUpiId = selectedAccount?.upiId || creditor.upiId || `${creditor.name.toLowerCase().replace(/\s+/g, '')}@upi`;
+
+  useEffect(() => {
+    if (selectedAccount?.customQrImage) {
+      setQrUrl(selectedAccount.customQrImage);
+    } else {
+      generateUPIQRCodeUrl({
+        upiId: activeUpiId,
+        payeeName: creditor.name,
+        amount,
+        note: `Settlement for ${groupName}`,
+      }).then(setQrUrl).catch(() => setQrUrl(''));
+    }
+  }, [selectedAccount, activeUpiId, creditor.name, amount, groupName]);
+
+  if (!isOpen) return null;
 
   const upiLink = generateUPILink({
     upiId: activeUpiId,
     payeeName: creditor.name,
     amount,
     note: `SplitShare settlement for ${groupName}`,
-  });
-
-  const qrUrl = selectedAccount?.customQrImage || generateUPIQRCodeUrl({
-    upiId: activeUpiId,
-    payeeName: creditor.name,
-    amount,
-    note: `Settlement for ${groupName}`,
   });
 
   const whatsappUrl = generateWhatsAppNudge({
@@ -111,7 +118,12 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs transition-all">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Settle Balance"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs transition-all"
+    >
       <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[90dvh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-6 duration-200">
         {/* Header */}
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
@@ -121,7 +133,8 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-200/60 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors"
+            aria-label="Close settle dialog"
+            className="min-w-[48px] min-h-[48px] rounded-full bg-slate-200/60 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors"
           >
             <X size={18} />
           </button>

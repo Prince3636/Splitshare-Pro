@@ -26,15 +26,15 @@ import {
   apiRecordSettlement,
   apiAddKittyContribution,
   apiAddKittyExpense,
-  apiResetData,
 } from '../utils/api';
 
-const STORAGE_KEY = 'splitshare_app_state_real_v4';
+const getStorageKey = (accountId?: string) =>
+  accountId ? `splitshare_state_${accountId}` : 'splitshare_state_anon';
 
 export function useAppStore(currentAccount: UserAccount | null) {
-  const loadState = () => {
+  const loadState = (accId?: string) => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(getStorageKey(accId));
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error('Failed to parse saved state', e);
@@ -50,10 +50,20 @@ export function useAppStore(currentAccount: UserAccount | null) {
     };
   };
 
-  const [state, setState] = useState(loadState);
+  const [state, setState] = useState(() => loadState(currentAccount?.id));
 
-  // Connect to server and real-time WebSocket
+  // Connect to server and real-time WebSocket when account changes
   useEffect(() => {
+    const currentStorageKey = getStorageKey(currentAccount?.id);
+    const initialSaved = localStorage.getItem(currentStorageKey);
+    if (initialSaved) {
+      try {
+        setState(JSON.parse(initialSaved));
+      } catch {
+        // ignore
+      }
+    }
+
     fetchState()
       .then((res) => {
         if (res?.data) {
@@ -88,15 +98,15 @@ export function useAppStore(currentAccount: UserAccount | null) {
     });
 
     return cleanup;
-  }, []);
+  }, [currentAccount?.id]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(getStorageKey(currentAccount?.id), JSON.stringify(state));
     } catch (e) {
       console.error('Failed to save state to localStorage', e);
     }
-  }, [state]);
+  }, [state, currentAccount?.id]);
 
   const currentUser: Member = currentAccount
     ? {
@@ -179,7 +189,7 @@ export function useAppStore(currentAccount: UserAccount | null) {
 
     const localGroup: Group = {
       ...payload,
-      id: 'g_' + Date.now(),
+      id: 'g_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Date.now()),
       createdAt: new Date().toISOString(),
     };
 
@@ -202,7 +212,7 @@ export function useAppStore(currentAccount: UserAccount | null) {
       return null;
     }
 
-    apiInviteEmail(groupId, cleanEmail, currentUser.id, currentUser.name).catch(console.error);
+    apiInviteEmail(groupId, cleanEmail).catch(console.error);
 
     const invite: GroupInvite = {
       id: 'inv_' + Date.now(),
@@ -225,7 +235,7 @@ export function useAppStore(currentAccount: UserAccount | null) {
   };
 
   const acceptGroupInvite = (inviteId: string) => {
-    apiAcceptInvite(inviteId, currentUser).catch(console.error);
+    apiAcceptInvite(inviteId).catch(console.error);
 
     setState((prev: any) => {
       const invite = prev.invites.find((i: GroupInvite) => i.id === inviteId);
@@ -321,7 +331,7 @@ export function useAppStore(currentAccount: UserAccount | null) {
     status: ApprovalStatus,
     queryNote?: string
   ) => {
-    apiRespondApproval(expenseId, memberId, status, queryNote).catch(console.error);
+    apiRespondApproval(expenseId, status, queryNote).catch(console.error);
 
     setState((prev: any) => {
       const updatedExpenses = prev.expenses.map((exp: Expense) => {
@@ -459,7 +469,6 @@ export function useAppStore(currentAccount: UserAccount | null) {
   };
 
   const clearAllData = () => {
-    apiResetData().catch(console.error);
     const clean = {
       groups: [],
       expenses: [],
@@ -470,7 +479,11 @@ export function useAppStore(currentAccount: UserAccount | null) {
       notifications: [],
     };
     setState(clean);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+    try {
+      localStorage.removeItem(getStorageKey(currentAccount?.id));
+    } catch {
+      // ignore
+    }
   };
 
   return {

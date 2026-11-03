@@ -152,7 +152,7 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             <span className="text-3xl p-2 bg-white/10 rounded-2xl backdrop-blur-xs">{group.emoji}</span>
             <div>
               <h1 className="text-lg font-extrabold tracking-tight">{group.name}</h1>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-300">
                 {group.members.length} members • {groupExpenses.length} bills
               </p>
             </div>
@@ -184,7 +184,7 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                     onClick={() => setShowSettingsMenu(false)}
                   />
                   <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white text-slate-800 shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in zoom-in-95">
-                    <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                       Group Actions
                     </div>
 
@@ -486,8 +486,8 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                           </div>
                         ) : (
                           <div>
-                            <span className="text-[10px] uppercase font-bold text-slate-400 block">not involved</span>
-                            <span className="text-xs font-semibold text-slate-400">₹0</span>
+                            <span className="text-[10px] uppercase font-bold text-slate-500 block">not involved</span>
+                            <span className="text-xs font-semibold text-slate-500">₹0</span>
                           </div>
                         )}
                       </div>
@@ -584,12 +584,12 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                           <p className="text-xs font-bold text-slate-900">
                             {member.name} {member.id === currentUser.id ? '(You)' : ''}
                           </p>
-                          <p className="text-[10px] text-slate-400">{member.upiId || 'No UPI ID'}</p>
+                          <p className="text-[10px] text-slate-500">{member.upiId || 'No UPI ID'}</p>
                         </div>
                       </div>
                       <div className="text-right">
                         <span className={`text-xs font-extrabold ${
-                          bal > 0.01 ? 'text-emerald-600' : bal < -0.01 ? 'text-rose-600' : 'text-slate-400'
+                          bal > 0.01 ? 'text-emerald-600' : bal < -0.01 ? 'text-rose-600' : 'text-slate-500'
                         }`}>
                           {bal > 0.01 ? `gets back ${formatCurrency(bal)}` : bal < -0.01 ? `owes ${formatCurrency(Math.abs(bal))}` : 'settled'}
                         </span>
@@ -608,12 +608,12 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                     <Scale size={14} className="text-emerald-600" />
                     Simplified Settle-ups
                   </h3>
-                  <p className="text-[11px] text-slate-400">Direct minimum-cash-flow payments</p>
+                  <p className="text-[11px] text-slate-500">Direct minimum-cash-flow payments</p>
                 </div>
               </div>
 
               {simplifiedDebts.length === 0 ? (
-                <div className="text-center py-6 text-slate-400 text-xs font-medium">
+                <div className="text-center py-6 text-slate-500 text-xs font-medium">
                   🎉 Everyone in this group is completely settled up!
                 </div>
               ) : (
@@ -693,7 +693,10 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                     const to = allMembers.find((m) => m.id === s.toMemberId) || group.members[1];
                     return (
                       <div key={s.id} className="py-2 flex items-center justify-between text-slate-600">
-                        <span>{from.name} paid {to.name}</span>
+                        <div>
+                          <span>{from.name} paid {to.name}</span>
+                          {s.upiRef && <span className="text-[10px] text-slate-500 block font-mono">Ref: {s.upiRef}</span>}
+                        </div>
                         <span className="font-bold text-emerald-600">{formatCurrency(s.amount)}</span>
                       </div>
                     );
@@ -731,14 +734,14 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                 Recent Kitty Expenses
               </h3>
               {groupKittyExp.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-4">No kitty expenses recorded yet.</p>
+                <p className="text-xs text-slate-500 text-center py-4">No kitty expenses recorded yet.</p>
               ) : (
                 <div className="divide-y divide-slate-100">
                   {groupKittyExp.map((ke) => (
                     <div key={ke.id} className="py-2.5 flex items-center justify-between">
                       <div>
                         <p className="text-xs font-bold text-slate-800">{ke.title}</p>
-                        <p className="text-[10px] text-slate-400">{formatRelativeDate(ke.date)}</p>
+                        <p className="text-[10px] text-slate-500">{formatRelativeDate(ke.date)}</p>
                       </div>
                       <span className="text-xs font-bold text-rose-600">-{formatCurrency(ke.amount)}</span>
                     </div>

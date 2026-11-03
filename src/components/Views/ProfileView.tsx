@@ -31,6 +31,7 @@ interface ProfileViewProps {
   onUpdateProfile: (updates: Partial<Member>) => void;
   onClearAllData: () => void;
   onSignOut?: () => void;
+  onDeleteAccount?: () => void;
   onAddUPIAccount?: (data: {
     label: string;
     upiId: string;
@@ -51,6 +52,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onUpdateProfile,
   onClearAllData,
   onSignOut,
+  onDeleteAccount,
   onAddUPIAccount,
   onDeleteUPIAccount,
   onSetDefaultUPIAccount,
@@ -59,6 +61,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(currentUser.name);
   const [phone, setPhone] = useState(currentUser.phone || '');
+  const [qrMap, setQrMap] = useState<Record<string, string>>({});
 
   // Add new UPI account modal / form
   const [showAddUpi, setShowAddUpi] = useState(false);
@@ -74,18 +77,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     qrUrl: string;
   } | null>(null);
 
-  // Compute total net across all groups for currentUser
-  let totalNetBalance = 0;
-  groups.forEach((g) => {
-    const groupExpenses = expenses.filter((e) => e.groupId === g.id);
-    const groupSettlements = settlements.filter((s) => s.groupId === g.id);
-    const { netBalances } = calculateBalances(
-      g.members.map((m) => m.id),
-      groupExpenses,
-      groupSettlements
-    );
-    totalNetBalance += netBalances[currentUser.id] || 0;
-  });
+  // Compute total net across all groups for currentUser (memoized)
+  const totalNetBalance = React.useMemo(() => {
+    let total = 0;
+    groups.forEach((g) => {
+      const groupExpenses = expenses.filter((e) => e.groupId === g.id);
+      const groupSettlements = settlements.filter((s) => s.groupId === g.id);
+      const { netBalances } = calculateBalances(
+        g.members.map((m) => m.id),
+        groupExpenses,
+        groupSettlements
+      );
+      total += netBalances[currentUser.id] || 0;
+    });
+    return total;
+  }, [groups, expenses, settlements, currentUser.id]);
 
   const upiList: UPIAccount[] = currentUser.upiAccounts && currentUser.upiAccounts.length > 0
     ? currentUser.upiAccounts
@@ -100,6 +106,31 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         },
       ]
     : [];
+
+  React.useEffect(() => {
+    let isMounted = true;
+    upiList.forEach((acc) => {
+      if (acc.customQrImage) {
+        setQrMap((prev) => ({ ...prev, [acc.id]: acc.customQrImage! }));
+      } else {
+        generateUPIQRCodeUrl({
+          upiId: acc.upiId,
+          payeeName: currentUser.name,
+          amount: 500,
+          note: 'SplitShare Payment',
+        })
+          .then((url) => {
+            if (isMounted && url) {
+              setQrMap((prev) => ({ ...prev, [acc.id]: url }));
+            }
+          })
+          .catch(() => {});
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [upiList, currentUser.name]);
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -245,22 +276,22 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
       </div>
 
-      {/* MULTIPLE UPI IDS & BARCODES SECTION */}
+      {/* PAYMENT ACCOUNTS (UPI & QR) */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
               <CreditCard size={15} className="text-emerald-600" />
-              My UPI Accounts & Barcodes
+              Payment Accounts
             </h2>
-            <p className="text-[11px] text-slate-400">Attach distinct barcodes (Paytm, GPay, PhonePe)</p>
+            <p className="text-[11px] text-slate-500 font-medium">UPI IDs for receiving repayments</p>
           </div>
           <button
             onClick={() => setShowAddUpi(true)}
             className="flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-xl transition-all active:scale-95"
           >
             <Plus size={14} />
-            Add UPI & Barcode
+            Add UPI
           </button>
         </div>
 
@@ -387,21 +418,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         {/* List of UPI accounts & barcodes */}
         {upiList.length === 0 ? (
           <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-            <QrCode size={24} className="text-slate-400 mx-auto mb-1" />
-            <p className="text-xs font-bold text-slate-700">No UPI accounts added yet</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Click "+ Add UPI & Barcode" above to attach your Paytm, PhonePe or GPay accounts.
+            <QrCode size={24} className="text-slate-500 mx-auto mb-1" />
+            <p className="text-xs font-bold text-slate-700">No payment accounts yet</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Add your UPI ID to receive direct settlements from friends.
             </p>
           </div>
         ) : (
           <div className="space-y-3">
             {upiList.map((acc) => {
-              const displayQr = acc.customQrImage || generateUPIQRCodeUrl({
-                upiId: acc.upiId,
-                payeeName: currentUser.name,
-                amount: 500,
-                note: 'SplitShare Payment',
-              });
+              const displayQr = qrMap[acc.id] || acc.customQrImage || '';
 
               return (
                 <div
@@ -476,7 +502,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                             className="text-[10px] font-bold text-emerald-700 hover:underline flex items-center gap-0.5"
                           >
                             <Maximize2 size={10} />
-                            View Barcode
+                            View QR Code
                           </button>
                         </div>
                       </div>
@@ -516,29 +542,35 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
       {/* Zoomed Barcode Modal */}
       {zoomQr && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${zoomQr.label} Barcode`}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in"
+        >
           <div className="bg-white rounded-3xl p-6 max-w-xs w-full text-center shadow-2xl space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-800">{zoomQr.label} Barcode</span>
+              <span className="text-xs font-bold text-slate-800">{zoomQr.label} QR Code</span>
               <button
                 onClick={() => setZoomQr(null)}
-                className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200"
+                aria-label="Close QR code preview"
+                className="min-w-[48px] min-h-[48px] rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors"
               >
-                <X size={15} />
+                <X size={18} />
               </button>
             </div>
 
             <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 inline-block">
               <img
                 src={zoomQr.qrUrl}
-                alt="Barcode"
+                alt="QR Code"
                 className="w-52 h-52 mx-auto object-contain rounded-xl"
               />
             </div>
 
             <p className="font-mono text-xs font-extrabold text-slate-900">{zoomQr.upiId}</p>
             <p className="text-[11px] text-slate-500">
-              Scan with any UPI camera scanner (Paytm, GPay, PhonePe)
+              Scan with any UPI app (GPay, PhonePe, Paytm)
             </p>
 
             <button
@@ -547,37 +579,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             >
               Done
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Switch Persona (for testing multi-device / multi-user flow) */}
-      {(allMembers?.length || 0) > 1 && (
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-2">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-            Switch Perspective
-          </h3>
-          <p className="text-xs text-slate-500">
-            Test the approval workflow by acting as another member:
-          </p>
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            {allMembers.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => onSelectUser(m.id)}
-                className={`p-2.5 rounded-xl flex items-center justify-between border text-left transition-all ${
-                  m.id === currentUser.id
-                    ? 'border-emerald-500 bg-emerald-50/60 font-bold text-emerald-900 shadow-xs'
-                    : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 truncate">
-                  <span>{m.avatar}</span>
-                  <span className="text-xs truncate">{m.name}</span>
-                </div>
-                {m.id === currentUser.id && <ShieldCheck size={15} className="text-emerald-600 shrink-0" />}
-              </button>
-            ))}
           </div>
         </div>
       )}
@@ -599,15 +600,66 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       <div className="pt-2">
         <button
           onClick={() => {
-            if (confirm('Are you sure you want to clear all groups and expenses?')) {
+            if (confirm('Are you sure you want to clear all cached groups and expenses on this device?')) {
               onClearAllData();
             }
           }}
-          className="w-full py-2.5 px-4 rounded-xl border border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+          className="w-full py-2.5 px-4 rounded-xl border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
         >
           <Trash2 size={14} />
-          Reset / Clear All Real Data
+          Clear Local Cache
         </button>
+      </div>
+
+      {/* Account Deletion (Google Play Store Mandatory Policy Compliance) */}
+      {onDeleteAccount && (
+        <div className="pt-2 pb-4">
+          <button
+            onClick={() => {
+              const confirmed = window.confirm(
+                '⚠️ PERMANENT ACCOUNT DELETION\n\nAre you sure you want to permanently delete your SplitShare account? All your personal account details will be purged from our servers. This cannot be undone.'
+              );
+              if (confirmed) {
+                const check = window.prompt('Type DELETE to confirm permanent account deletion:');
+                if (check === 'DELETE') {
+                  onDeleteAccount();
+                } else {
+                  alert('Account deletion aborted: text did not match "DELETE".');
+                }
+              }
+            }}
+            className="w-full py-2.5 px-4 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+          >
+            <Trash2 size={14} />
+            Delete Account & Purge Data
+          </button>
+        </div>
+      )}
+
+      {/* Legal & Compliance Links for Google Play Store Policy */}
+      <div className="pt-2 pb-6 text-center space-y-1.5 border-t border-slate-200 mt-2">
+        <div className="flex items-center justify-center gap-3 text-xs text-slate-500 font-semibold">
+          <a
+            href="/privacy-policy.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-emerald-700 underline underline-offset-2"
+          >
+            Privacy Policy
+          </a>
+          <span>•</span>
+          <a
+            href="/delete-account.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-rose-700 underline underline-offset-2"
+          >
+            Web Account Deletion
+          </a>
+        </div>
+        <p className="text-[10px] text-slate-500">
+          SplitShare v1.0.0 • Secure & Private
+        </p>
       </div>
     </div>
   );

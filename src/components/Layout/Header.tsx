@@ -40,11 +40,8 @@ export const Header: React.FC<HeaderProps> = ({
             💸
           </div>
           <div>
-            <span className="font-extrabold text-slate-900 text-lg tracking-tight flex items-center gap-1.5">
+            <span className="font-extrabold text-slate-900 text-lg tracking-tight">
               SplitShare
-              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
-                Live
-              </span>
             </span>
           </div>
         </div>

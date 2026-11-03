@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account Deletion Request - SplitShare</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #1e293b;
+      background-color: #f8fafc;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      background: #ffffff;
+      padding: 32px 36px;
+      border-radius: 16px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+      border: 1px solid #e2e8f0;
+    }
+    h1 {
+      color: #0f172a;
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+    .danger-box {
+      background-color: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      padding: 16px;
+      margin: 20px 0;
+      color: #991b1b;
+      font-size: 14px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    input[type="email"], input[type="password"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 15px;
+      margin-bottom: 16px;
+      outline: none;
+    }
+    input:focus {
+      border-color: #059669;
+      box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
+    }
+    button {
+      width: 100%;
+      background-color: #dc2626;
+      color: #ffffff;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background-color 0.15s;
+    }
+    button:hover {
+      background-color: #b91c1c;
+    }
+    .status-msg {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+    .status-msg.success {
+      background-color: #f0fdf4;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+      display: block;
+    }
+    .status-msg.error {
+      background-color: #fef2f2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+      display: block;
+    }
+    .in-app-note {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid #f1f5f9;
+      font-size: 13px;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>⚠️ Permanent Account Deletion</h1>
+    <p style="font-size: 14px; color: #64748b; margin-top: 0;">
+      Google Play Data Safety & User Rights Compliance Portal
+    </p>
+
+    <div class="danger-box">
+      <strong>Warning:</strong> Deleting your account is permanent. All your registered credentials, personal profiles, and active group participation records will be purged from SplitShare's production database.
+    </div>
+
+    <form id="delete-form" onsubmit="handleDelete(event)">
+      <label for="email">Registered Email Address</label>
+      <input type="email" id="email" required placeholder="you@example.com">
+
+      <label for="password">Account Password</label>
+      <input type="password" id="password" required placeholder="••••••••">
+
+      <button type="submit" id="submit-btn">Delete My Account & All Personal Data</button>
+    </form>
+
+    <div id="status" class="status-msg"></div>
+
+    <div class="in-app-note">
+      <strong>Prefer deleting via mobile app?</strong><br>
+      Open SplitShare &rarr; Go to <em>My UPI / Profile</em> tab &rarr; Tap <em>"Delete Account & Purge Data"</em>.
+    </div>
+  </div>
+
+  <script>
+    async function handleDelete(event) {
+      event.preventDefault();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const statusDiv = document.getElementById('status');
+      const submitBtn = document.getElementById('submit-btn');
+
+      if (!confirm(`Are you sure you want to permanently delete the SplitShare account registered to ${email}? This cannot be undone.`)) {
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Verifying and purging data...';
+      statusDiv.className = 'status-msg';
+      statusDiv.style.display = 'none';
+
+      try {
+        // Step 1: Sign in to get JWT token
+        const loginRes = await fetch('/api/auth/signin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: email, password: password })
+        });
+        const loginData = await loginRes.json();
+
+        if (!loginData.success || !loginData.token) {
+          throw new Error(loginData.error || 'Invalid email or password.');
+        }
+
+        // Step 2: Call DELETE account endpoint with token
+        const deleteRes = await fetch('/api/auth/account', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + loginData.token
+          }
+        });
+        const deleteData = await deleteRes.json();
+
+        if (!deleteData.success) {
+          throw new Error(deleteData.error || 'Failed to delete account.');
+        }
+
+        statusDiv.className = 'status-msg success';
+        statusDiv.innerText = '✅ Your SplitShare account and all associated personal data have been permanently purged. You may now close this window.';
+        document.getElementById('delete-form').style.display = 'none';
+      } catch (err) {
+        statusDiv.className = 'status-msg error';
+        statusDiv.innerText = '❌ ' + (err.message || 'An unexpected error occurred. Please try again.');
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Delete My Account & All Personal Data';
+      }
+    }
+  </script>
+</body>
+</html>

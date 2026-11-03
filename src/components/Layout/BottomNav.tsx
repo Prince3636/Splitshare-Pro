@@ -27,8 +27,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-lg border-t border-slate-200/90 shadow-lg pb-[env(safe-area-inset-bottom,0px)]">
-      <div className="max-w-md mx-auto grid grid-cols-4 h-16 items-center px-1">
+    <nav
+      aria-label="Main Navigation"
+      className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-lg border-t border-slate-200/90 shadow-lg pb-[env(safe-area-inset-bottom,0px)]"
+    >
+      <div role="tablist" aria-label="Bottom Navigation Tabs" className="max-w-md mx-auto grid grid-cols-4 h-16 items-center px-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -36,9 +39,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           return (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={isActive}
+              aria-label={tab.label}
               onClick={() => onChangeTab(tab.id)}
               className={`flex flex-col items-center justify-center h-full relative transition-all duration-150 active:scale-95 select-none ${
-                isActive ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'
+                isActive ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               <div className="relative">
@@ -51,7 +57,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               </div>
               <span
                 className={`text-[11px] mt-1 tracking-tight ${
-                  isActive ? 'font-bold text-emerald-700' : 'font-medium'
+                  isActive ? 'font-bold text-emerald-800' : 'font-medium text-slate-500'
                 }`}
               >
                 {tab.label}

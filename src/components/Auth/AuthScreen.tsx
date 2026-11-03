@@ -242,32 +242,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       <div className="w-full max-w-md min-h-screen min-h-[100dvh] bg-white flex flex-col shadow-2xl relative border-x border-slate-800 overflow-x-hidden">
         
         {/* Top Hero Brand Header */}
-        <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-white p-6 pt-10 pb-7 rounded-b-[2rem] shadow-xl relative shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-2xl shadow-md shadow-emerald-500/30">
-                💸
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-black tracking-tight">SplitShare</h1>
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30 uppercase tracking-wider">
-                    PRO
-                  </span>
-                </div>
-                <p className="text-xs text-slate-300 font-medium mt-0.5">
-                  Real-Time Bill Splitting & UPI Settle-Ups
-                </p>
-              </div>
+        <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-white p-6 pt-10 pb-6 rounded-b-3xl shadow-xl relative shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-xl shadow-md shadow-emerald-500/30">
+              💸
             </div>
-          </div>
-
-          <div className="mt-4 bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10 text-xs text-slate-200 flex items-start gap-2.5">
-            <ShieldCheck size={18} className="text-emerald-400 shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-white text-xs">Zero Fake Data • Pure Cloud Sync</p>
-              <p className="text-[11px] text-slate-300 mt-0.5 leading-snug">
-                Each member only sees their real groups, approved bills, and instant UPI receipts.
+              <h1 className="text-xl font-extrabold tracking-tight">SplitShare</h1>
+              <p className="text-xs text-slate-300 font-medium mt-0.5">
+                Simple group expense splitting
               </p>
             </div>
           </div>
@@ -706,7 +689,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
           <div className="pt-5 pb-2 text-center">
             <p className="text-[11px] text-slate-400 flex items-center justify-center gap-1.5 font-medium">
-              <span>🔒 256-bit Encrypted</span>
+              <span>🔒 Secure Authentication</span>
               <span>•</span>
               <span>Direct UPI Integration</span>
               <span>•</span>
