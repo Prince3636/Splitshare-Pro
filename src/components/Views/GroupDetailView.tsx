@@ -23,7 +23,8 @@ import {
   Copy,
   Check,
   Search,
-  FileText
+  FileText,
+  ArrowUpDown
 } from 'lucide-react';
 import { generateWhatsAppNudge } from '../../utils/whatsapp';
 import { generateGroupWhatsAppSummary, downloadGroupCSV } from '../../utils/exportSummary';
@@ -73,9 +74,10 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [copiedSummary, setCopiedSummary] = useState(false);
 
-  // Search & Filter state
+  // Search, Filter & Sort state
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [sortBy, setSortBy] = useState<'newest' | 'highest'>('newest');
 
   // Filter for this group
   const groupExpenses = expenses.filter((e) => e.groupId === group.id);
@@ -113,14 +115,23 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   // Creator check
   const isCreator = group.createdBy === currentUser.id;
 
-  // Filtered bills based on search and category
-  const filteredExpenses = groupExpenses.filter((e) => {
-    const matchesSearch = e.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || e.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  // Filtered and sorted bills based on search, category and sort order
+  const filteredExpenses = React.useMemo(() => {
+    const list = groupExpenses.filter((e) => {
+      const matchesSearch = e.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory === 'all' || e.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
 
-  const handleCopySummary = () => {
+    return [...list].sort((a, b) => {
+      if (sortBy === 'highest') {
+        return b.amount - a.amount;
+      }
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+  }, [groupExpenses, searchQuery, selectedCategory, sortBy]);
+
+  const handleCopySummary = async () => {
     const summary = generateGroupWhatsAppSummary({
       group,
       expenses: groupExpenses,
@@ -128,9 +139,24 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
       allMembers,
       totalSpent: totalConfirmedSpend,
     });
-    navigator.clipboard.writeText(summary);
-    setCopiedSummary(true);
-    setTimeout(() => setCopiedSummary(false), 2000);
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `${group.name} - SplitShare Summary`,
+          text: summary,
+        });
+        return;
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(summary);
+      setCopiedSummary(true);
+      setTimeout(() => setCopiedSummary(false), 2000);
+    } catch {}
   };
 
   const handleLeaveGroupClick = () => {
@@ -350,25 +376,36 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             {/* Search Bar & Category Filter */}
             {groupExpenses.length > 0 && (
               <div className="space-y-2">
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-slate-400">
-                    <Search size={15} />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Search bills by title..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:border-emerald-500"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
-                    >
-                      Clear
-                    </button>
-                  )}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-2.5 text-slate-400">
+                      <Search size={15} />
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Search bills..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:border-emerald-500"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSortBy(sortBy === 'newest' ? 'highest' : 'newest')}
+                    className="px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 shrink-0 transition-colors shadow-2xs"
+                    title={`Current sort: ${sortBy === 'newest' ? 'Newest bills' : 'Highest amount'}. Tap to toggle.`}
+                  >
+                    <ArrowUpDown size={13} className="text-emerald-600" />
+                    <span>{sortBy === 'newest' ? 'Newest' : 'Highest ₹'}</span>
+                  </button>
                 </div>
 
                 {/* Category filter pills */}
@@ -406,7 +443,7 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                 <span className="text-4xl block mb-2">🧾</span>
                 <h3 className="font-bold text-slate-800 text-sm">No bills added yet</h3>
                 <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                  Click the "+ Add Bill" button below to split restaurant dinners, cab rides, or rent!
+                  Add an expense to start tracking and splitting shared bills.
                 </p>
               </div>
             ) : filteredExpenses.length === 0 ? (
@@ -589,9 +626,13 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                       </div>
                       <div className="text-right">
                         <span className={`text-xs font-extrabold ${
-                          bal > 0.01 ? 'text-emerald-600' : bal < -0.01 ? 'text-rose-600' : 'text-slate-500'
+                          bal > 0.01 ? 'text-emerald-600' : bal < -0.01 ? 'text-rose-600' : 'text-slate-500 font-semibold'
                         }`}>
-                          {bal > 0.01 ? `gets back ${formatCurrency(bal)}` : bal < -0.01 ? `owes ${formatCurrency(Math.abs(bal))}` : 'settled'}
+                          {bal > 0.01
+                            ? (member.id === currentUser.id ? `You get back ${formatCurrency(bal)}` : `gets back ${formatCurrency(bal)}`)
+                            : bal < -0.01
+                            ? (member.id === currentUser.id ? `You owe ${formatCurrency(Math.abs(bal))}` : `owes ${formatCurrency(Math.abs(bal))}`)
+                            : 'Settled'}
                         </span>
                       </div>
                     </div>

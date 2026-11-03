@@ -199,3 +199,32 @@ npm uninstall @capacitor/camera
   - `src/components/Views/GroupsListView.tsx`: Replaced 15-line 3-step instructional empty state with a minimalist fintech card (*"No groups yet • Create a group to start splitting bills and settling balances"*).
   - `src/components/Views/ProfileView.tsx`: Simplified payment section to *"Payment Accounts"*, changed button to *"+ Add UPI"*, and cleaned QR code preview dialogs.
 
+---
+
+## Phase 6: UX Delight Features & Deep Verification
+
+### 6.1 Smart Category Auto-Detection
+* **File:** `src/components/Modals/AddExpenseModal.tsx`
+* **Feature:** Keyword analysis on title input automatically selects the matching category (e.g., Pizza/Burger ➔ Food, Uber/Cab ➔ Travel, Zepto/Blinkit ➔ Groceries, Netflix ➔ Entertainment, Hotel ➔ Stay).
+
+### 6.2 Quick Amount Chips & Increment Buttons
+* **File:** `src/components/Modals/AddExpenseModal.tsx`
+* **Feature:** One-tap preset chips (`₹100`, `₹200`, `₹500`, `₹1,000`, `₹2,000`) and increment chips (`+₹50`, `+₹100`, `+₹500`) to accelerate expense entry on mobile.
+
+### 6.3 Equal Split Quick Selectors
+* **File:** `src/components/Modals/AddExpenseModal.tsx`
+* **Feature:** Added "Select All" and "Only Me" controls to easily toggle participants in large groups.
+
+### 6.4 Native Share Sheet Integration
+* **File:** `src/components/Views/GroupDetailView.tsx`
+* **Feature:** Integrated `navigator.share` allowing 1-tap sharing of balance summaries directly into WhatsApp, Telegram, or any native mobile app.
+
+### 6.5 Dynamic Expense Sorting
+* **File:** `src/components/Views/GroupDetailView.tsx`
+* **Feature:** Toggle between *Newest Bills* and *Highest Amount (₹)* directly beside the search bar.
+
+### 6.6 Group Search & Personal Balance Phrasing
+* **File:** `src/components/Views/GroupsListView.tsx`
+* **Feature:** Real-time search filter for groups list and updated copy to personal *"You get back"* and *"You owe"*.
+
+

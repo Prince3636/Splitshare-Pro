@@ -133,12 +133,34 @@ This log tracks every change made during the execution of the 4-phase fix roadma
 
 ---
 
+## ⚡ Log Entry: Phase 6 — UX Delight Features & Deep Verification
+- **Status:** COMPLETED ✅
+- **Summary of Changes:**
+  1. **Smart Category Auto-Detection (`AddExpenseModal.tsx`):**
+     - Automatically infers expense category from input keywords (e.g. "Pizza" -> Food, "Uber" -> Travel, "Zepto" -> Groceries, "Netflix" -> Entertainment, "Hotel" -> Stay).
+  2. **Quick Amount Suggestion & Increment Chips (`AddExpenseModal.tsx`):**
+     - Instant preset chips (`₹100`, `₹200`, `₹500`, `₹1,000`, `₹2,000`) and quick increments (`+₹50`, `+₹100`, `+₹500`) for one-tap bill amount entry.
+  3. **Equal Split Quick Selectors (`AddExpenseModal.tsx`):**
+     - One-tap "Select All" and "Only Me" controls for customized equal splits in large groups.
+  4. **Native Android / Web Share Integration (`GroupDetailView.tsx`):**
+     - Integrated `navigator.share` sheet for direct 1-tap WhatsApp/Telegram/system sharing with automatic clipboard fallback.
+  5. **Real-time Expense Sorting Toggle (`GroupDetailView.tsx`):**
+     - Added instant toggle for *Newest Bills* vs *Highest Amount (₹)*.
+  6. **Group Search Bar (`GroupsListView.tsx`):**
+     - Instant real-time group search filtering with clear button.
+  7. **Personalized Balance Microcopy (`GroupsListView.tsx`, `GroupDetailView.tsx`):**
+     - Updated 3rd-person phrasing to direct, clear *"You get back"* and *"You owe"*.
+  8. **Terminology Cleanup (`SettleUpModal.tsx`):**
+     - Replaced legacy barcode mentions with modern *"QR Code"*.
+
+---
+
 ## 📊 Summary of Verification & Test Results
 | Test / Build Step | Command | Result | Details |
 |---|---|---|---|
-| Unit Tests | `npm run test` | ✅ PASS | 5/5 passed in 19ms |
-| Frontend TypeCheck & Bundle | `npm run build` | ✅ PASS | Main chunk: 265 kB (83 kB gzip) |
+| Unit Tests | `npm run test` | ✅ PASS | 5/5 passed in 10ms |
+| Frontend TypeCheck & Bundle | `npm run build` | ✅ PASS | Main chunk: 264.9 kB (82.9 kB gzip) |
 | Backend Syntax & Runtime | `npx tsx --eval ...` | ✅ PASS | Clean startup |
-| Capacitor Android Sync | `npx cap sync android` | ✅ PASS | Finished in 0.50s |
+| Capacitor Android Sync | `npx cap sync android` | ✅ PASS | Finished in 0.26s |
 | Play Store Icon Assets | `Test-Path android/play-store-assets/*.png` | ✅ PASS | 512x512 icon & 1024x500 feature graphic |
 | Legal Pages Validation | `Test-Path public/*.html` | ✅ PASS | Privacy policy & deletion portal ready |

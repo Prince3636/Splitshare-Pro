@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Group, Member, Expense, Settlement, AppNotification } from '../../types';
 import { calculateBalances } from '../../utils/debtSimplifier';
 import { formatCurrency } from '../../utils/formatters';
-import { Plus, ChevronRight, UserPlus, Sparkles, Receipt, AlertCircle, Bell } from 'lucide-react';
+import { Plus, ChevronRight, UserPlus, Sparkles, Receipt, AlertCircle, Bell, Search, X } from 'lucide-react';
 
 interface GroupsListViewProps {
   groups: Group[];
@@ -23,7 +23,9 @@ export const GroupsListView: React.FC<GroupsListViewProps> = ({
   onSelectGroup,
   onOpenCreateGroup,
 }) => {
-  const groupMetrics = React.useMemo(() => {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const groupMetrics = useMemo(() => {
     const map: Record<string, { myBalance: number; pendingForMe: number; unreadGroupNotifs: number; expenseCount: number }> = {};
     groups.forEach((group) => {
       const groupExpenses = expenses.filter((e) => e.groupId === group.id);
@@ -47,6 +49,12 @@ export const GroupsListView: React.FC<GroupsListViewProps> = ({
     return map;
   }, [groups, expenses, settlements, notifications, currentUser.id]);
 
+  const filteredGroups = useMemo(() => {
+    if (!searchQuery.trim()) return groups;
+    const query = searchQuery.toLowerCase().trim();
+    return groups.filter((g) => g.name.toLowerCase().includes(query));
+  }, [groups, searchQuery]);
+
   return (
     <div className="max-w-md mx-auto px-4 py-4 space-y-4 pb-28">
       {/* Top Banner */}
@@ -63,6 +71,28 @@ export const GroupsListView: React.FC<GroupsListViewProps> = ({
           New Group
         </button>
       </div>
+
+      {/* Optional Search Bar if user has multiple groups */}
+      {groups.length > 2 && (
+        <div className="relative">
+          <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search groups..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-8 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white placeholder:font-normal focus:outline-hidden focus:border-emerald-500"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Group Cards List OR Clean Minimal Empty State */}
       {groups.length === 0 ? (
@@ -85,9 +115,19 @@ export const GroupsListView: React.FC<GroupsListViewProps> = ({
             Create Group
           </button>
         </div>
+      ) : filteredGroups.length === 0 ? (
+        <div className="bg-white rounded-2xl p-6 text-center border border-slate-200 shadow-xs">
+          <p className="text-xs font-bold text-slate-700">No groups match "{searchQuery}"</p>
+          <button
+            onClick={() => setSearchQuery('')}
+            className="text-xs font-bold text-emerald-600 hover:underline mt-1"
+          >
+            Clear Search
+          </button>
+        </div>
       ) : (
         <div className="space-y-3">
-          {groups.map((group) => {
+          {filteredGroups.map((group) => {
             const { myBalance, pendingForMe, unreadGroupNotifs, expenseCount } = groupMetrics[group.id] || {
               myBalance: 0,
               pendingForMe: 0,
@@ -137,7 +177,7 @@ export const GroupsListView: React.FC<GroupsListViewProps> = ({
                           </span>
                         ) : null}
                       </h3>
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="text-xs text-slate-500 mt-0.5">
                         {group.members.length} members • {expenseCount} expenses
                       </p>
                     </div>
@@ -175,10 +215,10 @@ export const GroupsListView: React.FC<GroupsListViewProps> = ({
                         : 'text-slate-500 font-semibold'
                     }`}>
                       {myBalance > 0.01
-                        ? `gets back ${formatCurrency(myBalance)}`
+                        ? `You get back ${formatCurrency(myBalance)}`
                         : myBalance < -0.01
-                        ? `owes ${formatCurrency(Math.abs(myBalance))}`
-                        : 'settled'}
+                        ? `You owe ${formatCurrency(Math.abs(myBalance))}`
+                        : 'Settled'}
                     </span>
                   </div>
                 </div>

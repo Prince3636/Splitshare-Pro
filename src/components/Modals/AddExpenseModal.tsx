@@ -35,6 +35,34 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   const [exactAmounts, setExactAmounts] = useState<Record<string, string>>({});
   const [percentages, setPercentages] = useState<Record<string, string>>({});
 
+  // Smart Category Auto-Detection based on keyword
+  const handleTitleChange = (val: string) => {
+    setTitle(val);
+    const lower = val.toLowerCase();
+    if (/pizza|burger|dinner|lunch|breakfast|chai|tea|coffee|snack|biryani|swiggy|zomato|cafe|restaurant|drinks|beer|food|maggie|paneer|sweet/i.test(lower)) {
+      setCategory('food');
+    } else if (/uber|ola|cab|taxi|auto|petrol|fuel|diesel|toll|train|flight|metro|bus|travel|rapido/i.test(lower)) {
+      setCategory('travel');
+    } else if (/movie|cinema|netflix|spotify|game|party|club|concert|fun|hotstar|prime/i.test(lower)) {
+      setCategory('entertainment');
+    } else if (/grocery|groceries|zepto|blinkit|instamart|vegetables|fruits|milk|ration|bread|egg/i.test(lower)) {
+      setCategory('groceries');
+    } else if (/amazon|flipkart|clothes|shopping|shoes|myntra|zara/i.test(lower)) {
+      setCategory('shopping');
+    } else if (/hotel|airbnb|room|stay|resort|hostel|rent|lodge|flat/i.test(lower)) {
+      setCategory('stay');
+    }
+  };
+
+  const handleQuickAdd = (addVal: number) => {
+    const cur = parseFloat(amountStr) || 0;
+    setAmountStr(String(Math.round((cur + addVal) * 100) / 100));
+  };
+
+  const handleSetAmount = (val: number) => {
+    setAmountStr(String(val));
+  };
+
   // Reset or initialize state
   useEffect(() => {
     if (isOpen) {
@@ -182,7 +210,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
               required
               placeholder="e.g. Dinner, Cab to airport, Grocery"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => handleTitleChange(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all placeholder:font-normal"
             />
           </div>
@@ -224,6 +252,31 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Quick Amount Suggestion Chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Quick:</span>
+            {[100, 200, 500, 1000, 2000].map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => handleSetAmount(preset)}
+                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all active:scale-95 shrink-0"
+              >
+                ₹{preset}
+              </button>
+            ))}
+            {[50, 100, 500].map((increment) => (
+              <button
+                key={'inc_' + increment}
+                type="button"
+                onClick={() => handleQuickAdd(increment)}
+                className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition-all active:scale-95 shrink-0"
+              >
+                +{increment}
+              </button>
+            ))}
           </div>
 
           {/* Category Chips */}
@@ -307,9 +360,28 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-200/80 space-y-2.5">
             {splitType === 'EQUAL' && (
               <>
-                <p className="text-[11px] text-slate-500 font-medium">
-                  Select who was part of this bill ({selectedMemberIds.length} selected):
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Split with ({selectedMemberIds.length}/{group.members.length}):
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMemberIds(group.members.map((m) => m.id))}
+                      className="text-[10px] font-bold text-emerald-700 hover:underline"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-slate-300">•</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMemberIds([currentUser.id])}
+                      className="text-[10px] font-bold text-slate-500 hover:underline"
+                    >
+                      Only Me
+                    </button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   {group.members.map((m) => {
                     const isSelected = selectedMemberIds.includes(m.id);

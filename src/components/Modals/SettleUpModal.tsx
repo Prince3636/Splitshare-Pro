@@ -166,7 +166,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
           {upiAccounts.length > 1 && (
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                Choose {creditor.name.split(' ')[0]}'s Receiving Account & Barcode:
+                Choose {creditor.name.split(' ')[0]}'s Receiving Account & QR:
               </label>
               <div className="grid grid-cols-2 gap-2">
                 {upiAccounts.map((acc) => (
@@ -229,12 +229,12 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-center">
             <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-700 mb-2">
               <QrCode size={16} className="text-emerald-600" />
-              Scan {selectedAccount?.label || ''} Barcode
+              Scan {selectedAccount?.label || ''} QR Code
             </div>
             <div className="inline-block p-2 bg-white rounded-xl shadow-xs border border-slate-200">
               <img
                 src={qrUrl}
-                alt="UPI Barcode"
+                alt="UPI QR Code"
                 className="w-44 h-44 mx-auto object-contain rounded-lg"
                 loading="lazy"
               />
