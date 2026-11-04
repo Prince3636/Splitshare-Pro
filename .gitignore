@@ -33,6 +33,8 @@ android/app/src/main/assets/public/
 *.aab
 
 # Local environment & IDE files
+.env
+.env.*
 .env*.local
 .vscode/*
 !.vscode/extensions.json
