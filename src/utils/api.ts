@@ -72,8 +72,7 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
     }
     return { success: res.ok, status: res.status };
   } catch (err: any) {
-    console.error(`API Fetch Error on ${endpoint}:`, err);
-    return { success: false, error: err.message || 'Network request failed' };
+    return { success: false, offline: true, error: err.message || 'Backend is currently offline' };
   }
 }
 
@@ -235,18 +234,23 @@ export function connectWebSocket(onStateUpdate: (data: any) => void) {
 
       ws.onclose = (event) => {
         if (event.code !== 4001) { // Do not reconnect if unauthorized
-          const delay = Math.min(maxDelay, 2000 * Math.pow(1.5, reconnectAttempts)) + Math.random() * 1000;
           reconnectAttempts++;
+          // Progressive backoff to prevent console flooding if backend is offline
+          const delay = reconnectAttempts > 6
+            ? 30000
+            : Math.min(20000, 3000 * Math.pow(1.5, reconnectAttempts - 1));
           reconnectTimer = setTimeout(connect, delay);
         }
       };
 
       ws.onerror = () => {
-        ws?.close();
+        try {
+          ws?.close();
+        } catch {}
       };
     } catch {
-      const delay = Math.min(maxDelay, 2000 * Math.pow(1.5, reconnectAttempts));
       reconnectAttempts++;
+      const delay = reconnectAttempts > 6 ? 30000 : 5000;
       reconnectTimer = setTimeout(connect, delay);
     }
   }
