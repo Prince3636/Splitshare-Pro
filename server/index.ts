@@ -178,9 +178,6 @@ function saveDatabase() {
     syncMemoryToMongo().catch((err) => console.error('Error syncing to MongoDB:', err.message));
   }
 }
-    console.error('Error saving database:', e);
-  }
-}
 
 // Sanitize account (remove password hash)
 function sanitizeAccount(account: any) {
