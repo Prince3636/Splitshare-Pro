@@ -61,6 +61,9 @@ export interface Expense {
   groupId: string;
   title: string;
   amount: number;
+  currency?: string;
+  originalAmount?: number;
+  exchangeRate?: number;
   paidById: string;
   date: string;
   category: 'food' | 'travel' | 'stay' | 'groceries' | 'entertainment' | 'utilities' | 'other';
@@ -81,6 +84,7 @@ export interface Settlement {
   amount: number;
   date: string;
   upiRef?: string;
+  proofImage?: string;
   confirmed: boolean;
 }
 
@@ -137,7 +141,7 @@ export interface AppNotification {
   id: string;
   recipientEmail?: string;
   recipientUserId?: string;
-  type: 'INVITE' | 'BILL_APPROVAL' | 'REMINDER';
+  type: 'INVITE' | 'BILL_APPROVAL' | 'REMINDER' | 'SETTLEMENT' | 'EXPENSE_ADDED' | 'EXPENSE_APPROVED';
   title: string;
   message: string;
   relatedId?: string; // expenseId or inviteId

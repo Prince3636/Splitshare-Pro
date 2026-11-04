@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Member, UPIAccount } from '../../types';
-import { X, QrCode, Smartphone, MessageCircle, CheckCircle, Copy, Check, Star } from 'lucide-react';
-import { generateUPILink, generateUPIQRCodeUrl } from '../../utils/upi';
+import { X, QrCode, Smartphone, MessageCircle, CheckCircle, Copy, Check, Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { generateUPILink, generateAppSpecificUPILink, generateUPIQRCodeUrl } from '../../utils/upi';
 import { generateWhatsAppNudge } from '../../utils/whatsapp';
+import { compressImageFile } from '../../utils/imageCompressor';
 import confetti from 'canvas-confetti';
 
 interface SettleUpModalProps {
@@ -17,6 +18,7 @@ interface SettleUpModalProps {
     toMemberId: string;
     amount: number;
     upiRef?: string;
+    proofImage?: string;
   }) => void;
 }
 
@@ -32,6 +34,9 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
   const [copied, setCopied] = useState(false);
   const [upiRef, setUpiRef] = useState('');
   const [tone, setTone] = useState<'friendly' | 'funny' | 'formal'>('funny');
+  const [proofImage, setProofImage] = useState<string | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const upiAccounts: UPIAccount[] = creditor.upiAccounts && creditor.upiAccounts.length > 0
     ? creditor.upiAccounts
@@ -77,12 +82,17 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
 
   if (!isOpen) return null;
 
-  const upiLink = generateUPILink({
+  const upiParams = {
     upiId: activeUpiId,
     payeeName: creditor.name,
     amount,
     note: `SplitShare settlement for ${groupName}`,
-  });
+  };
+
+  const upiLink = generateUPILink(upiParams);
+  const gpayLink = generateAppSpecificUPILink('gpay', upiParams);
+  const phonepeLink = generateAppSpecificUPILink('phonepe', upiParams);
+  const paytmLink = generateAppSpecificUPILink('paytm', upiParams);
 
   const whatsappUrl = generateWhatsAppNudge({
     borrowerName: debtor.name.split(' ')[0],
@@ -99,6 +109,23 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsCompressing(true);
+      const compressed = await compressImageFile(file, 800, 0.75);
+      setProofImage(compressed);
+    } catch (err) {
+      console.error('Image upload failed', err);
+      alert('Could not process this screenshot. Please try another image.');
+    } finally {
+      setIsCompressing(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const handleMarkSettled = () => {
     try {
       confetti({
@@ -113,6 +140,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
       toMemberId: creditor.id,
       amount,
       upiRef: upiRef.trim() || undefined,
+      proofImage: proofImage || undefined,
     });
     onClose();
   };
@@ -212,8 +240,8 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             </button>
           </div>
 
-          {/* Action 1: Direct Pay on UPI App */}
-          <div>
+          {/* Action 1: 1-Tap UPI Intent Launchers */}
+          <div className="space-y-2">
             <a
               href={upiLink}
               target="_blank"
@@ -221,8 +249,35 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
               className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98]"
             >
               <Smartphone size={16} className="text-emerald-400" />
-              Pay via GPay / PhonePe / Paytm
+              1-Tap Pay via Any UPI App (Chooser)
             </a>
+
+            <div className="grid grid-cols-3 gap-2">
+              <a
+                href={gpayLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-2 px-2 rounded-xl bg-slate-100 hover:bg-blue-50 border border-slate-200 hover:border-blue-400 text-slate-800 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 text-center"
+              >
+                <span>🔵</span> Google Pay
+              </a>
+              <a
+                href={phonepeLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-2 px-2 rounded-xl bg-slate-100 hover:bg-purple-50 border border-slate-200 hover:border-purple-400 text-slate-800 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 text-center"
+              >
+                <span>🟣</span> PhonePe
+              </a>
+              <a
+                href={paytmLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-2 px-2 rounded-xl bg-slate-100 hover:bg-sky-50 border border-slate-200 hover:border-sky-400 text-slate-800 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 text-center"
+              >
+                <span>🔷</span> Paytm
+              </a>
+            </div>
           </div>
 
           {/* Action 2: Dynamic QR Code / Custom Barcode Scan */}
@@ -248,6 +303,61 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             <p className="text-[10px] text-slate-400 mt-2 font-medium">
               Scan with any UPI scanner to pay directly to {activeUpiId}
             </p>
+          </div>
+
+          {/* Payment Proof / Receipt Attachment */}
+          <div className="bg-slate-50/90 rounded-2xl p-3.5 border border-slate-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <ImageIcon size={14} className="text-emerald-600" />
+                Attach Payment Screenshot (Proof)
+              </label>
+              {proofImage && (
+                <button
+                  type="button"
+                  onClick={() => setProofImage(null)}
+                  className="text-[11px] text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1"
+                >
+                  <Trash2 size={12} /> Remove
+                </button>
+              )}
+            </div>
+
+            {proofImage ? (
+              <div className="relative group rounded-xl overflow-hidden border border-emerald-300 max-h-36 bg-black flex items-center justify-center">
+                <img
+                  src={proofImage}
+                  alt="Payment Proof"
+                  className="w-full h-36 object-contain"
+                />
+                <div className="absolute top-2 left-2 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs flex items-center gap-1">
+                  <Check size={11} /> Proof Attached
+                </div>
+              </div>
+            ) : (
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                  id="settle-proof-input"
+                />
+                <label
+                  htmlFor="settle-proof-input"
+                  className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl cursor-pointer bg-white transition-all text-center"
+                >
+                  <Upload size={18} className="text-slate-400 mb-1" />
+                  <span className="text-xs font-bold text-slate-700">
+                    {isCompressing ? 'Compressing Screenshot...' : 'Upload GPay/PhonePe Receipt'}
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">
+                    Helps payee verify your payment instantly
+                  </span>
+                </label>
+              </div>
+            )}
           </div>
 
           {/* Action 3: WhatsApp Nudge / Reminder */}

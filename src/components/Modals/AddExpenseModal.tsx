@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Group, Member, SplitType, SplitItem } from '../../types';
-import { X, Check, AlertCircle, ShieldCheck, ShieldAlert, Users, PieChart, Calculator } from 'lucide-react';
+import { X, Check, AlertCircle, ShieldCheck, ShieldAlert, Users, PieChart, Calculator, Globe, Edit3 } from 'lucide-react';
 import { CATEGORY_DETAILS } from '../../utils/formatters';
+import { SUPPORTED_CURRENCIES, getCurrencyConfig, convertToINR } from '../../utils/currencies';
 
 interface AddExpenseModalProps {
   isOpen: boolean;
@@ -20,6 +21,9 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 }) => {
   const [title, setTitle] = useState('');
   const [amountStr, setAmountStr] = useState('');
+  const [currency, setCurrency] = useState('INR');
+  const [customRateStr, setCustomRateStr] = useState('');
+  const [showRateEdit, setShowRateEdit] = useState(false);
   const [paidById, setPaidById] = useState(currentUser.id);
   const [category, setCategory] = useState<any>('food');
   const [splitType, setSplitType] = useState<SplitType>('EQUAL');
@@ -34,6 +38,11 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   // Custom values for Exact and Percentage
   const [exactAmounts, setExactAmounts] = useState<Record<string, string>>({});
   const [percentages, setPercentages] = useState<Record<string, string>>({});
+
+  const currConfig = getCurrencyConfig(currency);
+  const activeRate = currency === 'INR'
+    ? 1.0
+    : (parseFloat(customRateStr) > 0 ? parseFloat(customRateStr) : currConfig.defaultRateToINR);
 
   // Smart Category Auto-Detection based on keyword
   const handleTitleChange = (val: string) => {
@@ -68,6 +77,9 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     if (isOpen) {
       setPaidById(currentUser.id);
       setSelectedMemberIds(group.members.map((m) => m.id));
+      setCurrency('INR');
+      setCustomRateStr('');
+      setShowRateEdit(false);
       
       // Default equal percentages
       const defaultPct = (100 / group.members.length).toFixed(1);
@@ -81,22 +93,26 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
   if (!isOpen) return null;
 
-  const totalAmount = parseFloat(amountStr) || 0;
+  const rawEnteredAmount = parseFloat(amountStr) || 0;
+  const convertedInrAmount = currency === 'INR'
+    ? rawEnteredAmount
+    : convertToINR(rawEnteredAmount, currency, activeRate);
 
-  // Calculate splits based on selected split type
+  // Calculate splits based on selected split type (all stored in INR for unified math)
   let computedSplits: SplitItem[] = [];
   let validationError: string | null = null;
 
   if (splitType === 'EQUAL') {
     if (selectedMemberIds.length === 0) {
       validationError = 'Select at least one member to split with';
-    } else if (totalAmount > 0) {
-      const sharePerPerson = Math.round((totalAmount / selectedMemberIds.length) * 100) / 100;
-      // Adjust last person for rounding precision
+    } else if (convertedInrAmount > 0) {
+      const sharePerPerson = Math.round((convertedInrAmount / selectedMemberIds.length) * 100) / 100;
       let allocated = 0;
       computedSplits = selectedMemberIds.map((mId, index) => {
         const isLast = index === selectedMemberIds.length - 1;
-        const finalShare = isLast ? Math.round((totalAmount - allocated) * 100) / 100 : sharePerPerson;
+        const finalShare = isLast
+          ? Math.round((convertedInrAmount - allocated) * 100) / 100
+          : sharePerPerson;
         allocated += finalShare;
         return {
           memberId: mId,
@@ -105,21 +121,32 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       });
     }
   } else if (splitType === 'EXACT') {
-    let sumExact = 0;
-    computedSplits = group.members.map((m) => {
+    let sumExactEntered = 0;
+    group.members.forEach((m) => {
       const amt = parseFloat(exactAmounts[m.id] || '0') || 0;
-      sumExact += amt;
-      return {
-        memberId: m.id,
-        amount: amt,
-      };
+      sumExactEntered += amt;
     });
 
-    const diff = Math.round((totalAmount - sumExact) * 100) / 100;
+    const diff = Math.round((rawEnteredAmount - sumExactEntered) * 100) / 100;
     if (Math.abs(diff) > 0.01) {
       validationError = diff > 0 
-        ? `₹${diff.toFixed(2)} remaining to assign` 
-        : `Overallocated by ₹${Math.abs(diff).toFixed(2)}`;
+        ? `${currConfig.symbol}${diff.toFixed(2)} remaining to assign` 
+        : `Overallocated by ${currConfig.symbol}${Math.abs(diff).toFixed(2)}`;
+    } else {
+      let allocated = 0;
+      computedSplits = group.members.map((m, index) => {
+        const enteredVal = parseFloat(exactAmounts[m.id] || '0') || 0;
+        const inrShare = currency === 'INR'
+          ? enteredVal
+          : (index === group.members.length - 1
+              ? Math.round((convertedInrAmount - allocated) * 100) / 100
+              : Math.round(enteredVal * activeRate * 100) / 100);
+        allocated += inrShare;
+        return {
+          memberId: m.id,
+          amount: inrShare,
+        };
+      });
     }
   } else if (splitType === 'PERCENTAGE') {
     let sumPct = 0;
@@ -132,12 +159,17 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     if (Math.abs(diffPct) > 0.05) {
       validationError = `Percentages must equal 100% (currently ${sumPct.toFixed(1)}%)`;
     } else {
-      computedSplits = group.members.map((m) => {
+      let allocated = 0;
+      computedSplits = group.members.map((m, index) => {
         const p = parseFloat(percentages[m.id] || '0') || 0;
-        const amt = Math.round((totalAmount * (p / 100)) * 100) / 100;
+        const isLast = index === group.members.length - 1;
+        const share = isLast
+          ? Math.round((convertedInrAmount - allocated) * 100) / 100
+          : Math.round((convertedInrAmount * (p / 100)) * 100) / 100;
+        allocated += share;
         return {
           memberId: m.id,
-          amount: amt,
+          amount: share,
           percentage: p,
         };
       });
@@ -150,7 +182,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       alert('Please enter a description for the expense');
       return;
     }
-    if (totalAmount <= 0) {
+    if (convertedInrAmount <= 0) {
       alert('Please enter a valid amount');
       return;
     }
@@ -162,7 +194,10 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     onAddExpense({
       groupId: group.id,
       title: title.trim(),
-      amount: totalAmount,
+      amount: convertedInrAmount,
+      currency: currency !== 'INR' ? currency : undefined,
+      originalAmount: currency !== 'INR' ? rawEnteredAmount : undefined,
+      exchangeRate: currency !== 'INR' ? activeRate : undefined,
       paidById,
       date: new Date().toISOString(),
       category,
@@ -200,7 +235,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
-          {/* Title & Amount Inputs */}
+          {/* Title Input */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
               Expense Description
@@ -208,20 +243,23 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
             <input
               type="text"
               required
-              placeholder="e.g. Dinner, Cab to airport, Grocery"
+              placeholder="e.g. Dinner, Cab to airport, Hotel room"
               value={title}
               onChange={(e) => handleTitleChange(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all placeholder:font-normal"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
+          {/* Amount & Currency Selection Grid */}
+          <div className="grid grid-cols-12 gap-2.5">
+            <div className="col-span-7">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                Total Amount (₹)
+                Amount ({currConfig.symbol})
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-2.5 text-slate-400 font-bold text-base">₹</span>
+                <span className="absolute left-3.5 top-2.5 text-slate-400 font-bold text-base">
+                  {currConfig.symbol}
+                </span>
                 <input
                   type="number"
                   step="any"
@@ -236,38 +274,107 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
               </div>
             </div>
 
-            <div>
+            <div className="col-span-5">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                Paid By
+                Currency
               </label>
               <select
-                value={paidById}
-                onChange={(e) => setPaidById(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30"
+                value={currency}
+                onChange={(e) => {
+                  setCurrency(e.target.value);
+                  setCustomRateStr('');
+                }}
+                className="w-full px-2.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30"
               >
-                {group.members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.avatar} {m.name} {m.id === currentUser.id ? '(You)' : ''}
+                {SUPPORTED_CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.flag} {c.code} ({c.symbol})
                   </option>
                 ))}
               </select>
             </div>
           </div>
 
+          {/* Multi-Currency Conversion Info Pill */}
+          {currency !== 'INR' && rawEnteredAmount > 0 && (
+            <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-blue-950 flex items-center gap-1.5">
+                  <Globe size={14} className="text-blue-600" />
+                  Trip Conversion to INR:
+                </span>
+                <span className="font-extrabold text-blue-700 text-sm">
+                  ≈ ₹{convertedInrAmount.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-blue-800/80">
+                <span>
+                  Rate: 1 {currency} = ₹{activeRate} INR
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowRateEdit(!showRateEdit)}
+                  className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5"
+                >
+                  <Edit3 size={11} /> {showRateEdit ? 'Hide' : 'Edit Rate'}
+                </button>
+              </div>
+
+              {showRateEdit && (
+                <div className="pt-2 border-t border-blue-200/80 flex items-center gap-2">
+                  <span className="text-[11px] font-medium text-slate-600">Custom Rate (₹):</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder={String(currConfig.defaultRateToINR)}
+                    value={customRateStr}
+                    onChange={(e) => setCustomRateStr(e.target.value)}
+                    className="w-24 px-2 py-1 text-xs font-bold rounded-lg border border-blue-300 bg-white focus:outline-hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setCustomRateStr('')}
+                    className="text-[10px] text-slate-400 hover:text-slate-600 underline"
+                  >
+                    Reset
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Paid By Selection */}
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              Paid By
+            </label>
+            <select
+              value={paidById}
+              onChange={(e) => setPaidById(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30"
+            >
+              {group.members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.avatar} {m.name} {m.id === currentUser.id ? '(You)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Quick Amount Suggestion Chips */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Quick:</span>
-            {[100, 200, 500, 1000, 2000].map((preset) => (
+            {(currency === 'INR' ? [100, 200, 500, 1000, 2000] : [10, 20, 50, 100, 200]).map((preset) => (
               <button
                 key={preset}
                 type="button"
                 onClick={() => handleSetAmount(preset)}
                 className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all active:scale-95 shrink-0"
               >
-                ₹{preset}
+                {currConfig.symbol}{preset}
               </button>
             ))}
-            {[50, 100, 500].map((increment) => (
+            {(currency === 'INR' ? [50, 100, 500] : [5, 10, 50]).map((increment) => (
               <button
                 key={'inc_' + increment}
                 type="button"
@@ -311,7 +418,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
               </label>
               <span className="text-[11px] font-semibold text-emerald-600">
                 {splitType === 'EQUAL' && 'Equally Divided'}
-                {splitType === 'EXACT' && 'Custom Rupee Split'}
+                {splitType === 'EXACT' && `Exact ${currConfig.symbol} Split`}
                 {splitType === 'PERCENTAGE' && 'Percentage Share'}
               </span>
             </div>
@@ -339,7 +446,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                 }`}
               >
                 <Calculator size={14} />
-                Exact ₹
+                Exact {currConfig.symbol}
               </button>
               <button
                 type="button"
@@ -385,9 +492,9 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                   {group.members.map((m) => {
                     const isSelected = selectedMemberIds.includes(m.id);
-                    const perPerson =
+                    const perPersonRaw =
                       selectedMemberIds.length > 0
-                        ? (totalAmount / selectedMemberIds.length).toFixed(0)
+                        ? (rawEnteredAmount / selectedMemberIds.length).toFixed(1)
                         : '0';
 
                     return (
@@ -414,7 +521,9 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                           </span>
                         </div>
                         {isSelected && (
-                          <span className="text-[11px] font-bold text-emerald-600">₹{perPerson}</span>
+                          <span className="text-[11px] font-bold text-emerald-600">
+                            {currConfig.symbol}{perPersonRaw}
+                          </span>
                         )}
                       </button>
                     );
@@ -441,7 +550,9 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                       <span className="text-xs font-semibold text-slate-800">{m.name}</span>
                     </div>
                     <div className="relative w-28">
-                      <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-bold">₹</span>
+                      <span className="absolute left-2.5 top-1.5 text-xs text-slate-400 font-bold">
+                        {currConfig.symbol}
+                      </span>
                       <input
                         type="number"
                         placeholder="0"
@@ -470,7 +581,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                 </div>
                 {group.members.map((m) => {
                   const pct = parseFloat(percentages[m.id] || '0') || 0;
-                  const calculatedAmt = ((totalAmount * pct) / 100).toFixed(0);
+                  const calculatedAmt = ((rawEnteredAmount * pct) / 100).toFixed(1);
 
                   return (
                     <div key={m.id} className="flex items-center justify-between gap-3 bg-white p-2 rounded-xl border border-slate-200">
@@ -479,7 +590,9 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                         <span className="text-xs font-semibold text-slate-800">{m.name}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-400 font-medium">₹{calculatedAmt}</span>
+                        <span className="text-[11px] text-slate-400 font-medium">
+                          {currConfig.symbol}{calculatedAmt}
+                        </span>
                         <div className="relative w-20">
                           <input
                             type="number"
@@ -500,7 +613,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
             )}
           </div>
 
-          {/* Approval System Toggle (User's special requirement) */}
+          {/* Approval System Toggle */}
           <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3.5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-2.5">
@@ -512,7 +625,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                 <div>
                   <h4 className="text-xs font-bold text-amber-950">Require Member Approvals</h4>
                   <p className="text-[11px] text-amber-800/80 leading-relaxed mt-0.5">
-                    When enabled, debtors will get a confirmation prompt. The bill only impacts final balances once accepted!
+                    When enabled, debtors get an instant approval prompt. The bill only updates final balances once accepted!
                   </p>
                 </div>
               </div>
@@ -541,11 +654,11 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={Boolean(validationError) || totalAmount <= 0}
+            disabled={Boolean(validationError) || rawEnteredAmount <= 0}
             className="flex-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:pointer-events-none text-white text-xs font-bold shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
           >
             <Check size={16} />
-            Add Expense {totalAmount > 0 ? `(₹${totalAmount.toLocaleString('en-IN')})` : ''}
+            Add Expense {rawEnteredAmount > 0 ? `(${currConfig.symbol}${rawEnteredAmount.toLocaleString('en-US')}${currency !== 'INR' ? ` ≈ ₹${convertedInrAmount.toLocaleString('en-IN')}` : ''})` : ''}
           </button>
         </div>
       </div>

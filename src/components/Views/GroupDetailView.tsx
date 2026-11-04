@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Group, Member, Expense, Settlement, KittyContribution, KittyExpense } from '../../types';
 import { calculateBalances } from '../../utils/debtSimplifier';
 import { formatCurrency, formatRelativeDate, CATEGORY_DETAILS } from '../../utils/formatters';
+import { formatForeignExpense } from '../../utils/currencies';
 import { 
   Plus, 
   ArrowUpRight, 
@@ -24,7 +25,9 @@ import {
   Check,
   Search,
   FileText,
-  ArrowUpDown
+  ArrowUpDown,
+  X,
+  Image as ImageIcon
 } from 'lucide-react';
 import { generateWhatsAppNudge } from '../../utils/whatsapp';
 import { generateGroupWhatsAppSummary, downloadGroupCSV } from '../../utils/exportSummary';
@@ -73,6 +76,7 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [copiedSummary, setCopiedSummary] = useState(false);
+  const [viewingProof, setViewingProof] = useState<string | null>(null);
 
   // Search, Filter & Sort state
   const [searchQuery, setSearchQuery] = useState('');
@@ -500,8 +504,15 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            <span className="font-semibold text-slate-700">{payer.name.split(' ')[0]}</span> paid {formatCurrency(expense.amount)} • {formatRelativeDate(expense.date)}
+                          <p className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-1">
+                            <span className="font-semibold text-slate-700">{payer.name.split(' ')[0]}</span>
+                            <span>paid {formatCurrency(expense.amount)}</span>
+                            {expense.currency && expense.currency !== 'INR' && expense.originalAmount && (
+                              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded-md">
+                                {formatForeignExpense(expense.amount, expense.currency, expense.originalAmount).replace(/₹[0-9,.]+\s*/, '')}
+                              </span>
+                            )}
+                            <span>• {formatRelativeDate(expense.date)}</span>
                           </p>
                         </div>
                       </div>
@@ -733,12 +744,27 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                     const from = allMembers.find((m) => m.id === s.fromMemberId) || group.members[0];
                     const to = allMembers.find((m) => m.id === s.toMemberId) || group.members[1];
                     return (
-                      <div key={s.id} className="py-2 flex items-center justify-between text-slate-600">
+                      <div key={s.id} className="py-2.5 flex items-center justify-between text-slate-600">
                         <div>
-                          <span>{from.name} paid {to.name}</span>
-                          {s.upiRef && <span className="text-[10px] text-slate-500 block font-mono">Ref: {s.upiRef}</span>}
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-800">{from.name}</span>
+                            <span className="text-slate-400">paid</span>
+                            <span className="font-semibold text-slate-800">{to.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {s.upiRef && <span className="text-[10px] text-slate-500 font-mono">Ref: {s.upiRef}</span>}
+                            {s.proofImage && (
+                              <button
+                                type="button"
+                                onClick={() => setViewingProof(s.proofImage!)}
+                                className="text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors"
+                              >
+                                <span>🧾</span> View Receipt Proof
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <span className="font-bold text-emerald-600">{formatCurrency(s.amount)}</span>
+                        <span className="font-bold text-emerald-600 text-sm">{formatCurrency(s.amount)}</span>
                       </div>
                     );
                   })}
@@ -852,6 +878,48 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
         group={group}
         onConfirmDelete={onDeleteGroup}
       />
+
+      {/* Payment Proof Receipt Lightbox Modal */}
+      {viewingProof && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Payment Proof Receipt"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setViewingProof(null)}
+        >
+          <div
+            className="bg-white rounded-3xl p-4 max-w-sm w-full space-y-3 shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                <span>🧾</span> Payment Receipt Proof
+              </h3>
+              <button
+                onClick={() => setViewingProof(null)}
+                className="min-w-[40px] min-h-[40px] rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors"
+                aria-label="Close preview"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="rounded-2xl overflow-hidden bg-slate-950 flex items-center justify-center max-h-96">
+              <img
+                src={viewingProof}
+                alt="Payment Receipt Screenshot"
+                className="w-full max-h-96 object-contain"
+              />
+            </div>
+            <button
+              onClick={() => setViewingProof(null)}
+              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold transition-all active:scale-95"
+            >
+              Close Preview
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

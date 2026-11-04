@@ -1,6 +1,7 @@
 import React from 'react';
 import { Expense, Settlement, KittyContribution, KittyExpense, Group, Member } from '../../types';
 import { formatCurrency, formatRelativeDate, CATEGORY_DETAILS } from '../../utils/formatters';
+import { formatForeignExpense } from '../../utils/currencies';
 import { CheckCircle2, TrendingUp, PiggyBank, Receipt, ArrowRightLeft } from 'lucide-react';
 
 interface ActivityViewProps {
@@ -33,6 +34,8 @@ export const ActivityView: React.FC<ActivityViewProps> = ({
         type: 'EXPENSE',
         title: e.title,
         amount: e.amount,
+        currency: e.currency,
+        originalAmount: e.originalAmount,
         groupId: e.groupId,
         actorId: e.paidById,
         status: e.status,
@@ -148,6 +151,11 @@ export const ActivityView: React.FC<ActivityViewProps> = ({
                     }`}>
                       {formatCurrency(item.amount)}
                     </span>
+                    {item.currency && item.currency !== 'INR' && item.originalAmount && (
+                      <span className="text-[10px] text-blue-600 font-bold block">
+                        {formatForeignExpense(item.amount, item.currency, item.originalAmount).replace(/₹[0-9,.]+\s*/, '')}
+                      </span>
+                    )}
                   </div>
                 </div>
               );

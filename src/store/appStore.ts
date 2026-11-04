@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Group,
   Member,
@@ -27,6 +27,7 @@ import {
   apiAddKittyContribution,
   apiAddKittyExpense,
 } from '../utils/api';
+import { sendLocalPushNotification } from '../utils/notifications';
 
 const getStorageKey = (accountId?: string) =>
   accountId ? `splitshare_state_${accountId}` : 'splitshare_state_anon';
@@ -116,6 +117,7 @@ export function useAppStore(currentAccount: UserAccount | null) {
   };
 
   const [state, setState] = useState(() => loadState(currentAccount?.id));
+  const notifiedIdsRef = useRef<Set<string>>(new Set());
 
   // Connect to server and real-time WebSocket when account changes
   useEffect(() => {
@@ -123,7 +125,11 @@ export function useAppStore(currentAccount: UserAccount | null) {
     const initialSaved = localStorage.getItem(currentStorageKey);
     if (initialSaved) {
       try {
-        setState(JSON.parse(initialSaved));
+        const parsed = JSON.parse(initialSaved);
+        setState(parsed);
+        (parsed.notifications || []).forEach((n: AppNotification) => {
+          notifiedIdsRef.current.add(n.id);
+        });
       } catch {
         // ignore
       }
@@ -132,6 +138,9 @@ export function useAppStore(currentAccount: UserAccount | null) {
     fetchState()
       .then((res) => {
         if (res?.data) {
+          (res.data.notifications || []).forEach((n: AppNotification) => {
+            notifiedIdsRef.current.add(n.id);
+          });
           setState({
             groups: res.data.groups || [],
             expenses: res.data.expenses || [],
@@ -150,6 +159,26 @@ export function useAppStore(currentAccount: UserAccount | null) {
     // Real-time live multi-phone synchronization
     const cleanup = connectWebSocket((serverData) => {
       if (serverData) {
+        // Trigger push notifications for brand new unread alerts for this user
+        const incomingNotifs = (serverData.notifications || []).filter(
+          (n: AppNotification) =>
+            n.recipientUserId === currentAccount?.id ||
+            (currentAccount?.email &&
+              n.recipientEmail &&
+              n.recipientEmail.toLowerCase() === currentAccount.email.toLowerCase())
+        );
+
+        incomingNotifs.forEach((n: AppNotification) => {
+          if (!n.read && !notifiedIdsRef.current.has(n.id)) {
+            notifiedIdsRef.current.add(n.id);
+            sendLocalPushNotification({
+              title: n.title,
+              body: n.message,
+              tag: n.id,
+            });
+          }
+        });
+
         setState({
           groups: serverData.groups || [],
           expenses: serverData.expenses || [],

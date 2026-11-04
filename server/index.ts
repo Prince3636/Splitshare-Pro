@@ -717,10 +717,30 @@ app.post('/api/expenses', requireAuth, (req: AuthenticatedRequest, res: Response
         });
       }
     });
+  } else {
+    // Notify other members that a new bill was added
+    (group.members || []).forEach((m: any) => {
+      if (m.id !== callerId) {
+        newNotifs.push({
+          id: 'notif_' + crypto.randomUUID(),
+          recipientUserId: m.id,
+          type: 'EXPENSE_ADDED',
+          title: 'New Expense Added 💸',
+          message: `${payerName} added "${expenseData.title}" in ${group.name} (₹${totalAmount.toFixed(0)})`,
+          groupId: group.id,
+          relatedId: newExpenseId,
+          createdAt: new Date().toISOString(),
+          read: false,
+        });
+      }
+    });
   }
 
   const newExpense = {
     ...expenseData,
+    currency: expenseData.currency || 'INR',
+    originalAmount: expenseData.originalAmount ? Number(expenseData.originalAmount) : undefined,
+    exchangeRate: expenseData.exchangeRate ? Number(expenseData.exchangeRate) : undefined,
     id: newExpenseId,
     amount: totalAmount,
     paidById: callerId,
@@ -768,6 +788,26 @@ app.post('/api/expenses/:id/respond', requireAuth, (req: AuthenticatedRequest, r
     expense.status = 'CONFIRMED';
   }
 
+  // Notify the bill payer about the response
+  if (expense.paidById && expense.paidById !== memberId) {
+    const responder = (db.accounts || []).find((a: any) => a.id === memberId);
+    const responderName = responder?.name || 'A member';
+    db.notifications.unshift({
+      id: 'notif_' + crypto.randomUUID(),
+      recipientUserId: expense.paidById,
+      type: status === 'ACCEPTED' ? 'EXPENSE_APPROVED' : 'BILL_APPROVAL',
+      title: status === 'ACCEPTED' ? 'Bill Approved ✅' : 'Bill Query Raised ⚠️',
+      message:
+        status === 'ACCEPTED'
+          ? `${responderName} accepted your bill "${expense.title}".`
+          : `${responderName} questioned "${expense.title}": "${queryNote || 'Needs check'}"`,
+      groupId: expense.groupId,
+      relatedId: expense.id,
+      createdAt: new Date().toISOString(),
+      read: false,
+    });
+  }
+
   saveDatabase();
   broadcastScopedState();
 
@@ -776,7 +816,7 @@ app.post('/api/expenses/:id/respond', requireAuth, (req: AuthenticatedRequest, r
 
 // Settlement Recording (Two-way Handshake)
 app.post('/api/settlements', requireAuth, (req: AuthenticatedRequest, res: Response) => {
-  const { groupId, creditorId, amount, upiRef } = req.body;
+  const { groupId, creditorId, amount, upiRef, proofImage } = req.body;
   const debtorId = req.user!.id;
 
   const numAmount = Number(amount);
@@ -797,6 +837,7 @@ app.post('/api/settlements', requireAuth, (req: AuthenticatedRequest, res: Respo
     toMemberId: creditorId,
     amount: numAmount,
     upiRef: upiRef?.trim() || undefined,
+    proofImage: proofImage || undefined,
     date: new Date().toISOString(),
     confirmed: true, // Marked recorded
   };
@@ -807,8 +848,8 @@ app.post('/api/settlements', requireAuth, (req: AuthenticatedRequest, res: Respo
     id: 'notif_' + crypto.randomUUID(),
     recipientUserId: creditorId,
     type: 'SETTLEMENT',
-    title: 'Payment Recorded / Settled 💸',
-    message: `${debtorName} recorded a ₹${numAmount.toFixed(0)} payment in "${group.name}".`,
+    title: proofImage ? 'Payment Proof Received 🧾' : 'Payment Recorded / Settled 💸',
+    message: `${debtorName} recorded a ₹${numAmount.toFixed(0)} payment in "${group.name}".${proofImage ? ' Screenshot attached.' : ''}`,
     groupId,
     createdAt: new Date().toISOString(),
     read: false,

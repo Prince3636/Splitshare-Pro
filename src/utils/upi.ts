@@ -21,6 +21,26 @@ export function generateUPILink({ upiId, payeeName, amount, note }: UPIParams): 
   return `upi://pay?pa=${cleanUPI}&pn=${cleanName}&am=${formattedAmount}&cu=INR&tn=${cleanNote}`;
 }
 
+export function generateAppSpecificUPILink(app: 'gpay' | 'phonepe' | 'paytm' | 'generic', params: UPIParams): string {
+  const baseUpi = generateUPILink(params);
+  const query = baseUpi.replace('upi://pay?', '');
+
+  switch (app) {
+    case 'gpay':
+      // Google Pay intent / custom URI
+      return `gpay://upi/pay?${query}`;
+    case 'phonepe':
+      // PhonePe custom URI
+      return `phonepe://pay?${query}`;
+    case 'paytm':
+      // Paytm custom URI
+      return `paytmmp://pay?${query}`;
+    case 'generic':
+    default:
+      return baseUpi;
+  }
+}
+
 /**
  * Generate client-side offline QR code data URL (PNG/Base64)
  * 100% private, zero network roundtrip, works offline and in airplane mode.

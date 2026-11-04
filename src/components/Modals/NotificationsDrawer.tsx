@@ -1,7 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AppNotification, GroupInvite, Expense, Member } from '../../types';
-import { X, Bell, Mail, Check, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
+import { X, Bell, Mail, Check, AlertTriangle, Clock, CheckCircle2, BellRing } from 'lucide-react';
 import { formatRelativeDate, formatCurrency } from '../../utils/formatters';
+import {
+  isNotificationSupported,
+  getNotificationPermission,
+  requestNotificationPermission,
+  sendLocalPushNotification,
+} from '../../utils/notifications';
 
 interface NotificationsDrawerProps {
   isOpen: boolean;
@@ -30,6 +36,8 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
   onOpenDisputeModal,
   onMarkAllRead,
 }) => {
+  const [permState, setPermState] = useState<string>(() => getNotificationPermission());
+
   if (!isOpen) return null;
 
   // Bills requiring approval for currentUser
@@ -40,6 +48,17 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
   );
 
   const totalItems = pendingInvites.length + myPendingExpenses.length + notifications.length;
+
+  const handleEnablePush = async () => {
+    const granted = await requestNotificationPermission();
+    setPermState(getNotificationPermission());
+    if (granted) {
+      sendLocalPushNotification({
+        title: 'Push Alerts Enabled! 🔔',
+        body: 'SplitShare will alert you for bills, payments & approvals in real-time.',
+      });
+    }
+  };
 
   return (
     <div
@@ -68,6 +87,22 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
             <X size={18} />
           </button>
         </div>
+
+        {/* Permission Banner for Web & Mobile Push */}
+        {isNotificationSupported() && permState === 'default' && (
+          <div className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <BellRing size={16} className="text-emerald-200 animate-bounce" />
+              <span className="text-[11px] font-bold">Enable Real-Time Push Alerts</span>
+            </div>
+            <button
+              onClick={handleEnablePush}
+              className="px-3 py-1 bg-white text-emerald-800 text-[11px] font-extrabold rounded-lg shadow-xs hover:bg-emerald-50 transition-all active:scale-95"
+            >
+              Turn On
+            </button>
+          </div>
+        )}
 
         {/* Content list */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
@@ -99,19 +134,16 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
 
                   <div className="flex gap-2 pt-1">
                     <button
-                      onClick={() => onDeclineInvite(invite.id)}
-                      className="flex-1 py-1.5 rounded-xl border border-emerald-300 text-xs font-bold text-emerald-900 bg-white hover:bg-emerald-100/50 transition-colors"
+                      onClick={() => onAcceptInvite(invite.id)}
+                      className="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xs hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1.5"
                     >
-                      Decline
+                      <Check size={14} /> Join Group
                     </button>
                     <button
-                      onClick={() => {
-                        onAcceptInvite(invite.id);
-                      }}
-                      className="flex-2 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs flex items-center justify-center gap-1 transition-all active:scale-95"
+                      onClick={() => onDeclineInvite(invite.id)}
+                      className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-100 transition-colors"
                     >
-                      <Check size={14} />
-                      Accept & Join Group
+                      Decline
                     </button>
                   </div>
                 </div>
@@ -119,48 +151,51 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
             </div>
           )}
 
-          {/* Section 2: Pending Bill Approvals */}
+          {/* Section 2: Bills Awaiting Approval */}
           {myPendingExpenses.length > 0 && (
             <div className="space-y-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 block">
-                Bills Awaiting Your Approval ({myPendingExpenses.length})
+                Bills Waiting For Your Approval ({myPendingExpenses.length})
               </span>
-              {myPendingExpenses.map((exp) => {
-                const mySplit = exp.splits.find((s) => s.memberId === currentUser.id);
+              {myPendingExpenses.map((expense) => {
+                const myShare =
+                  expense.splits?.find((s) => s.memberId === currentUser.id)?.amount || 0;
 
                 return (
                   <div
-                    key={exp.id}
-                    className="bg-amber-50/70 border border-amber-200 rounded-2xl p-3.5 space-y-2 shadow-xs"
+                    key={expense.id}
+                    className="bg-amber-50/70 border border-amber-200 rounded-2xl p-3.5 space-y-2.5 shadow-xs"
                   >
                     <div className="flex items-start justify-between">
                       <div>
-                        <h4 className="text-xs font-bold text-slate-900">{exp.title}</h4>
-                        <p className="text-[11px] text-slate-600 mt-0.5">
-                          Total: {formatCurrency(exp.amount)} • Your Share:{' '}
-                          <strong className="text-amber-900 font-extrabold">
-                            {formatCurrency(mySplit?.amount || 0)}
-                          </strong>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-amber-950">{expense.title}</span>
+                          <span className="px-1.5 py-0.5 rounded-sm bg-amber-200/70 text-amber-900 text-[10px] font-bold">
+                            Approval Needed
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-amber-800/80 mt-0.5">
+                          Total: ₹{expense.amount.toFixed(0)} • Your share:{' '}
+                          <strong className="text-amber-950 font-bold">₹{myShare.toFixed(0)}</strong>
                         </p>
                       </div>
-                      <span className="text-[10px] text-slate-400">
-                        {formatRelativeDate(exp.date)}
+                      <span className="text-[10px] text-amber-700">
+                        {formatRelativeDate(expense.date)}
                       </span>
                     </div>
 
                     <div className="flex gap-2 pt-1">
                       <button
-                        onClick={() => onOpenDisputeModal(exp)}
-                        className="flex-1 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold text-amber-900 hover:bg-amber-100/50 transition-colors"
+                        onClick={() => onAcceptApproval(expense.id)}
+                        className="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xs hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1"
                       >
-                        Query
+                        <Check size={14} /> Accept Share
                       </button>
                       <button
-                        onClick={() => onAcceptApproval(exp.id)}
-                        className="flex-2 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs flex items-center justify-center gap-1 transition-all active:scale-95"
+                        onClick={() => onOpenDisputeModal(expense)}
+                        className="flex-1 py-2 rounded-xl bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold hover:bg-amber-200 transition-colors flex items-center justify-center gap-1"
                       >
-                        <Check size={14} />
-                        Accept Bill
+                        <AlertTriangle size={14} /> Raise Query
                       </button>
                     </div>
                   </div>
@@ -176,10 +211,18 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
                 Recent Alerts
               </span>
               <div className="divide-y divide-slate-100 bg-slate-50 rounded-2xl p-2 border border-slate-200">
-                {notifications.slice(0, 8).map((notif) => (
+                {notifications.slice(0, 10).map((notif) => (
                   <div key={notif.id} className="py-2.5 px-2 text-xs flex items-start gap-2.5">
                     <span className="text-base shrink-0 mt-0.5">
-                      {notif.type === 'INVITE' ? '✉️' : notif.type === 'REMINDER' ? '⏰' : '🧾'}
+                      {notif.type === 'INVITE'
+                        ? '✉️'
+                        : notif.type === 'REMINDER'
+                        ? '⏰'
+                        : notif.type === 'SETTLEMENT'
+                        ? '💸'
+                        : notif.type === 'EXPENSE_APPROVED'
+                        ? '✅'
+                        : '🧾'}
                     </span>
                     <div className="flex-1">
                       <p className="font-bold text-slate-800">{notif.title}</p>
