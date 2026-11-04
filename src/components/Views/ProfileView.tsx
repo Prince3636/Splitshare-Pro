@@ -3,6 +3,13 @@ import { Member, Group, Expense, Settlement, UPIAccount } from '../../types';
 import { calculateBalances } from '../../utils/debtSimplifier';
 import { formatCurrency } from '../../utils/formatters';
 import { generateUPIQRCodeUrl } from '../../utils/upi';
+import {
+  SUPPORTED_CURRENCIES,
+  getCurrencyConfig,
+  detectLocationCurrency,
+  detectGPSLocationCurrency,
+  DetectedLocationInfo,
+} from '../../utils/currencies';
 import { 
   UserCheck, 
   QrCode, 
@@ -18,7 +25,10 @@ import {
   Smartphone,
   Maximize2,
   X,
-  LogOut
+  LogOut,
+  Globe,
+  MapPin,
+  Navigation
 } from 'lucide-react';
 
 interface ProfileViewProps {
@@ -33,6 +43,13 @@ interface ProfileViewProps {
   onSignOut?: () => void;
   onDeleteAccount?: () => void;
   onAddUPIAccount?: (data: {
+    label: string;
+    upiId: string;
+    isDefault?: boolean;
+    customQrImage?: string;
+  }) => void;
+  onUpdateUPIAccount?: (data: {
+    id: string;
     label: string;
     upiId: string;
     isDefault?: boolean;
@@ -54,6 +71,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onSignOut,
   onDeleteAccount,
   onAddUPIAccount,
+  onUpdateUPIAccount,
   onDeleteUPIAccount,
   onSetDefaultUPIAccount,
 }) => {
@@ -70,12 +88,25 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [newIsDefault, setNewIsDefault] = useState(false);
   const [newCustomQr, setNewCustomQr] = useState<string | undefined>(undefined);
 
+  // Edit UPI account modal / form
+  const [editingUpiAccount, setEditingUpiAccount] = useState<UPIAccount | null>(null);
+  const [editLabel, setEditLabel] = useState('Paytm');
+  const [editUpiId, setEditUpiId] = useState('');
+  const [editIsDefault, setEditIsDefault] = useState(false);
+  const [editCustomQr, setEditCustomQr] = useState<string | undefined>(undefined);
+
   // Zoomed QR code modal
   const [zoomQr, setZoomQr] = useState<{
     label: string;
     upiId: string;
     qrUrl: string;
   } | null>(null);
+
+  // Currency & Location state
+  const [detectedLocation, setDetectedLocation] = useState<DetectedLocationInfo>(() => detectLocationCurrency());
+  const [isGpsDetecting, setIsGpsDetecting] = useState(false);
+
+  const activePrefCurrency = currentUser.preferredCurrency || detectedLocation.currencyCode || 'INR';
 
   // Compute total net across all groups for currentUser (memoized)
   const totalNetBalance = React.useMemo(() => {
@@ -148,11 +179,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     setIsEditing(false);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size limit (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
       alert('File size too large. Please select an image under 2MB.');
       return;
@@ -160,7 +190,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
     const reader = new FileReader();
     reader.onload = () => {
-      setNewCustomQr(reader.result as string);
+      if (isEdit) {
+        setEditCustomQr(reader.result as string);
+      } else {
+        setNewCustomQr(reader.result as string);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -188,6 +222,56 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     setShowAddUpi(false);
   };
 
+  const handleStartEditUPI = (acc: UPIAccount) => {
+    setEditingUpiAccount(acc);
+    setEditLabel(acc.label);
+    setEditUpiId(acc.upiId);
+    setEditIsDefault(acc.isDefault);
+    setEditCustomQr(acc.customQrImage);
+  };
+
+  const handleSaveEditUPI = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUpiAccount) return;
+    if (!editUpiId.trim()) {
+      alert('Please enter a valid UPI ID');
+      return;
+    }
+
+    if (onUpdateUPIAccount) {
+      onUpdateUPIAccount({
+        id: editingUpiAccount.id,
+        label: editLabel.trim() || 'My UPI',
+        upiId: editUpiId.trim(),
+        isDefault: editIsDefault,
+        customQrImage: editCustomQr,
+      });
+    }
+
+    setEditingUpiAccount(null);
+  };
+
+  const handleCurrencyChange = (newCode: string) => {
+    onUpdateProfile({ preferredCurrency: newCode });
+  };
+
+  const handleGPSDetect = async () => {
+    setIsGpsDetecting(true);
+    try {
+      const gpsResult = await detectGPSLocationCurrency();
+      if (gpsResult) {
+        setDetectedLocation(gpsResult);
+        onUpdateProfile({ preferredCurrency: gpsResult.currencyCode });
+      } else {
+        alert(`Location detected from device timezone: ${detectedLocation.locationDetail}`);
+      }
+    } catch {
+      alert('Location detection unavailable.');
+    } finally {
+      setIsGpsDetecting(false);
+    }
+  };
+
   return (
     <div className="max-w-md mx-auto px-4 py-4 space-y-4 pb-28">
       {/* Profile Card with Mobile Number */}
@@ -198,82 +282,100 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               {currentUser.avatar}
             </div>
             <div>
-              <h1 className="text-xl font-extrabold">{currentUser.name}</h1>
-              <p className="text-xs text-emerald-100 font-medium mt-0.5 flex items-center gap-1">
-                <Smartphone size={12} />
-                {currentUser.phone || 'No mobile number set'}
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold">{currentUser.name}</h1>
+                <span className="text-[10px] bg-emerald-500/80 text-white px-2 py-0.5 rounded-full font-semibold border border-white/20 flex items-center gap-1">
+                  <UserCheck size={11} /> Active
+                </span>
+              </div>
+              <p className="text-xs text-emerald-100 flex items-center gap-1 mt-0.5">
+                <Smartphone size={12} className="opacity-80" />
+                {currentUser.phone ? currentUser.phone : 'No phone linked'}
               </p>
             </div>
           </div>
 
           <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-colors flex items-center gap-1 text-xs font-bold active:scale-95"
-            title="Edit profile & phone number"
+            onClick={() => {
+              setName(currentUser.name);
+              setPhone(currentUser.phone || '');
+              setIsEditing(!isEditing);
+            }}
+            className="flex items-center gap-1 text-xs font-semibold bg-white/20 hover:bg-white/30 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/20 transition-colors"
           >
-            <Edit3 size={14} />
-            Edit
+            <Edit3 size={13} />
+            {isEditing ? 'Cancel' : 'Edit'}
           </button>
         </div>
 
-        {/* Inline Edit Form for Name and Mobile Number */}
+        {/* Total Net Balance Across All Groups */}
+        <div className="mt-5 pt-4 border-t border-white/20">
+          <p className="text-xs uppercase tracking-wider text-emerald-100 font-semibold">
+            Total Balance (All Groups)
+          </p>
+          <div className="flex items-baseline gap-2 mt-0.5">
+            <h2 className="text-2xl font-black">
+              {totalNetBalance > 0.01
+                ? `+${formatCurrency(totalNetBalance)}`
+                : totalNetBalance < -0.01
+                ? `-${formatCurrency(Math.abs(totalNetBalance))}`
+                : 'All accounts balanced'}
+            </h2>
+            <span className="text-xs text-emerald-100 font-medium">
+              {totalNetBalance > 0.01
+                ? 'you will receive'
+                : totalNetBalance < -0.01
+                ? 'you need to pay'
+                : 'settled'}
+            </span>
+          </div>
+        </div>
+
+        {/* Edit Profile Form */}
         {isEditing && (
-          <form onSubmit={handleSaveProfile} className="mt-4 pt-3 border-t border-emerald-500/30 space-y-2 text-slate-800 animate-in fade-in">
+          <form onSubmit={handleSaveProfile} className="mt-4 pt-4 border-t border-white/20 space-y-3 animate-in fade-in">
             <div>
-              <label className="block text-[10px] uppercase font-bold text-emerald-100 mb-0.5">Your Real Name</label>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-emerald-100 mb-1">
+                Display Name
+              </label>
               <input
                 type="text"
-                required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-1.5 rounded-lg bg-white text-xs font-semibold focus:outline-hidden"
+                className="w-full px-3 py-2 rounded-xl bg-white/10 border border-white/20 text-white placeholder-emerald-200 text-xs font-semibold focus:outline-hidden focus:bg-white/20"
+                placeholder="Your Name"
+                required
               />
             </div>
             <div>
-              <label className="block text-[10px] uppercase font-bold text-emerald-100 mb-0.5">Mobile Number</label>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-emerald-100 mb-1">
+                Phone Number (for UPI & WhatsApp)
+              </label>
               <input
-                type="text"
-                placeholder="e.g. +91 9876543210"
+                type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3 py-1.5 rounded-lg bg-white text-xs font-semibold focus:outline-hidden"
+                className="w-full px-3 py-2 rounded-xl bg-white/10 border border-white/20 text-white placeholder-emerald-200 text-xs font-semibold focus:outline-hidden focus:bg-white/20"
+                placeholder="e.g. 9876543210"
               />
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
-                className="text-xs font-semibold text-emerald-100 px-2 py-1"
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="text-xs font-bold bg-white text-emerald-800 px-3 py-1 rounded-lg shadow-xs"
+                className="px-4 py-1.5 rounded-xl text-xs font-bold bg-white text-emerald-800 shadow-md hover:bg-emerald-50 transition-colors"
               >
-                Save Changes
+                Save Profile
               </button>
             </div>
           </form>
         )}
-
-        {/* Overall Net Balance */}
-        <div className="mt-4 pt-3.5 border-t border-emerald-500/30 flex items-center justify-between">
-          <div>
-            <span className="text-[11px] font-semibold text-emerald-200 uppercase tracking-wider">
-              Total Balance (All Groups)
-            </span>
-            <p className={`text-xl font-black mt-0.5 ${
-              totalNetBalance > 0 ? 'text-white' : totalNetBalance < 0 ? 'text-rose-200' : 'text-emerald-100'
-            }`}>
-              {totalNetBalance > 0
-                ? `You get back ${formatCurrency(totalNetBalance)}`
-                : totalNetBalance < 0
-                ? `You owe ${formatCurrency(Math.abs(totalNetBalance))}`
-                : 'All accounts balanced'}
-            </p>
-          </div>
-        </div>
       </div>
 
       {/* PAYMENT ACCOUNTS (UPI & QR) */}
@@ -361,7 +463,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={handleImageUpload}
+                  onChange={(e) => handleImageUpload(e, false)}
                   className="hidden"
                 />
               </label>
@@ -413,6 +515,164 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </button>
             </div>
           </form>
+        )}
+
+        {/* Edit UPI Account Modal */}
+        {editingUpiAccount && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Edit Payment Account"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in"
+          >
+            <form
+              onSubmit={handleSaveEditUPI}
+              className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-3 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-150"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <Edit3 size={15} />
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-900">Edit Payment Account</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingUpiAccount(null)}
+                  className="text-slate-400 hover:text-slate-600"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Account Label / App Name
+                </label>
+                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                  {['Paytm', 'Google Pay', 'PhonePe', 'HDFC Bank', 'SBI UPI', 'CRED'].map((lbl) => (
+                    <button
+                      key={lbl}
+                      type="button"
+                      onClick={() => setEditLabel(lbl)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                        editLabel === lbl
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={editLabel}
+                  onChange={(e) => setEditLabel(e.target.value)}
+                  placeholder="Custom label"
+                  className="w-full mt-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  UPI ID *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. rahul@okhdfcbank"
+                  value={editUpiId}
+                  onChange={(e) => setEditUpiId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-500 font-mono"
+                />
+              </div>
+
+              {/* Custom Barcode / QR Upload in Edit */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Custom Barcode / QR Image
+                </label>
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl p-3 bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors">
+                  <Upload size={18} className="text-slate-400 mb-1" />
+                  <span className="text-xs font-semibold text-slate-700">
+                    {editCustomQr ? 'Replace Barcode Image' : 'Upload New QR Image'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, true)}
+                    className="hidden"
+                  />
+                </label>
+
+                {editCustomQr && (
+                  <div className="mt-2 text-center">
+                    <img
+                      src={editCustomQr}
+                      alt="Barcode Preview"
+                      className="w-20 h-20 mx-auto object-contain rounded-lg border border-slate-200 p-1 bg-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditCustomQr(undefined)}
+                      className="text-[10px] text-rose-600 font-bold mt-1 hover:underline"
+                    >
+                      Remove custom QR (Revert to auto-generated)
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="editDefaultCheck"
+                  checked={editIsDefault}
+                  onChange={(e) => setEditIsDefault(e.target.checked)}
+                  className="rounded-sm border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <label htmlFor="editDefaultCheck" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                  Set as Primary receiving account
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100">
+                {onDeleteUPIAccount && upiList.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`Delete payment account "${editingUpiAccount.label}"?`)) {
+                        onDeleteUPIAccount(editingUpiAccount.id);
+                        setEditingUpiAccount(null);
+                      }
+                    }}
+                    className="text-rose-600 hover:text-rose-700 text-xs font-bold flex items-center gap-1 p-1"
+                  >
+                    <Trash2 size={13} /> Delete
+                  </button>
+                ) : (
+                  <span />
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingUpiAccount(null)}
+                    className="text-xs font-bold text-slate-500 px-3 py-2 rounded-xl hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl shadow-xs transition-all active:scale-95"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         )}
 
         {/* List of UPI accounts & barcodes */}
@@ -518,8 +778,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Actions: Set Default / Delete */}
+                    {/* Actions: Edit / Set Default / Delete */}
                     <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      <button
+                        onClick={() => handleStartEditUPI(acc)}
+                        className="flex items-center gap-1 text-[10px] font-bold text-slate-700 hover:text-emerald-700 bg-white hover:bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg transition-all shadow-2xs active:scale-95"
+                        title="Edit Payment Account"
+                      >
+                        <Edit3 size={11} className="text-emerald-600" />
+                        Edit
+                      </button>
+
                       {!acc.isDefault && onSetDefaultUPIAccount && (
                         <button
                           onClick={() => onSetDefaultUPIAccount(acc.id)}
@@ -548,6 +817,75 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             })}
           </div>
         )}
+      </div>
+
+      {/* CURRENCY & REGIONAL SETTINGS */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Globe size={16} />
+            </div>
+            <div>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Currency & Regional Settings
+              </h2>
+              <p className="text-[11px] text-slate-500 font-medium">
+                Default currency for your bills and trips
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGPSDetect}
+            disabled={isGpsDetecting}
+            className="text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 active:scale-95"
+            title="Auto-detect currency from device GPS"
+          >
+            <Navigation size={11} className={isGpsDetecting ? 'animate-spin' : ''} />
+            {isGpsDetecting ? 'Locating...' : 'Auto Detect GPS'}
+          </button>
+        </div>
+
+        {/* Active Currency Display & Picker */}
+        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl">{getCurrencyConfig(activePrefCurrency).flag}</span>
+              <div>
+                <span className="text-xs font-bold text-slate-900">
+                  {activePrefCurrency} ({getCurrencyConfig(activePrefCurrency).symbol}) • {getCurrencyConfig(activePrefCurrency).name}
+                </span>
+                <p className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
+                  <MapPin size={10} className="text-emerald-600 shrink-0" />
+                  {currentUser.preferredCurrency
+                    ? `Saved Preference (Overrides location)`
+                    : detectedLocation.source === 'gps'
+                    ? `GPS Pinpointed: ${detectedLocation.countryName}`
+                    : `Auto-detected from timezone (${detectedLocation.locationDetail})`}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+              Choose Currency:
+            </label>
+            <select
+              value={activePrefCurrency}
+              onChange={(e) => handleCurrencyChange(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30"
+            >
+              {SUPPORTED_CURRENCIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.flag} {c.code} ({c.symbol}) - {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Zoomed Barcode Modal */}

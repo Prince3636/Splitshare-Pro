@@ -39,3 +39,4 @@ export async function compressImageFile(file: File, maxWidth: number = 800, qual
     reader.readAsDataURL(file);
   });
 }
+

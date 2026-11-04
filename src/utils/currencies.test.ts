@@ -4,6 +4,7 @@ import {
   getCurrencyConfig,
   convertToINR,
   formatForeignExpense,
+  detectLocationCurrency,
 } from './currencies';
 
 describe('Multi-Currency System', () => {
@@ -32,5 +33,13 @@ describe('Multi-Currency System', () => {
 
     const inrOnly = formatForeignExpense(1500, 'INR', 1500);
     expect(inrOnly).toBe('₹1,500');
+  });
+
+  it('auto-detects location currency smoothly without errors', () => {
+    const detected = detectLocationCurrency();
+    expect(detected).toBeDefined();
+    expect(detected.currencyCode).toBeDefined();
+    expect(typeof detected.currencyCode).toBe('string');
+    expect(detected.currencyCode.length).toBe(3);
   });
 });

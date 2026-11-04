@@ -212,6 +212,7 @@ export function useAppStore(currentAccount: UserAccount | null) {
         upiId: currentAccount.upiId,
         upiAccounts: currentAccount.upiAccounts || [],
         phone: currentAccount.phone,
+        preferredCurrency: currentAccount.preferredCurrency,
       }
     : {
         id: 'guest',

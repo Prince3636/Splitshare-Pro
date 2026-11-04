@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Group, Member, SplitType, SplitItem } from '../../types';
 import { X, Check, AlertCircle, ShieldCheck, ShieldAlert, Users, PieChart, Calculator, Globe, Edit3 } from 'lucide-react';
 import { CATEGORY_DETAILS } from '../../utils/formatters';
-import { SUPPORTED_CURRENCIES, getCurrencyConfig, convertToINR } from '../../utils/currencies';
+import { SUPPORTED_CURRENCIES, getCurrencyConfig, convertToINR, detectLocationCurrency } from '../../utils/currencies';
 
 interface AddExpenseModalProps {
   isOpen: boolean;
@@ -21,7 +21,8 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 }) => {
   const [title, setTitle] = useState('');
   const [amountStr, setAmountStr] = useState('');
-  const [currency, setCurrency] = useState('INR');
+  const initialCurr = currentUser.preferredCurrency || detectLocationCurrency().currencyCode || 'INR';
+  const [currency, setCurrency] = useState(initialCurr);
   const [customRateStr, setCustomRateStr] = useState('');
   const [showRateEdit, setShowRateEdit] = useState(false);
   const [paidById, setPaidById] = useState(currentUser.id);
@@ -77,7 +78,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     if (isOpen) {
       setPaidById(currentUser.id);
       setSelectedMemberIds(group.members.map((m) => m.id));
-      setCurrency('INR');
+      setCurrency(currentUser.preferredCurrency || detectLocationCurrency().currencyCode || 'INR');
       setCustomRateStr('');
       setShowRateEdit(false);
       

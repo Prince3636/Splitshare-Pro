@@ -27,6 +27,7 @@ export interface UserAccount {
   token?: string;
   emailVerified?: boolean;
   authProvider?: 'password' | 'google' | 'phone';
+  preferredCurrency?: string;
   createdAt: string;
 }
 
@@ -39,6 +40,7 @@ export interface Member {
   upiId?: string;
   upiAccounts?: UPIAccount[];
   phone?: string;
+  preferredCurrency?: string;
 }
 
 export interface SplitItem {

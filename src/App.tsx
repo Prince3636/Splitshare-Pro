@@ -40,6 +40,7 @@ export const App: React.FC = () => {
     switchAccount,
     updateAccount,
     addUPIAccount,
+    updateUPIAccount,
     deleteUPIAccount,
     setDefaultUPIAccount,
   } = useAuthStore();
@@ -369,6 +370,7 @@ export const App: React.FC = () => {
                 onSignOut={signOut}
                 onDeleteAccount={deleteAccount}
                 onAddUPIAccount={addUPIAccount}
+                onUpdateUPIAccount={updateUPIAccount}
                 onDeleteUPIAccount={deleteUPIAccount}
                 onSetDefaultUPIAccount={setDefaultUPIAccount}
               />

@@ -319,6 +319,39 @@ export function useAuthStore() {
     });
   };
 
+  const updateUPIAccount = (accountData: {
+    id: string;
+    label: string;
+    upiId: string;
+    isDefault?: boolean;
+    customQrImage?: string;
+  }) => {
+    if (!currentAccount) return;
+    const currentList = currentAccount.upiAccounts || [];
+    const makeDefault = Boolean(accountData.isDefault);
+
+    let chosenUpi = currentAccount.upiId;
+
+    const updatedList = currentList.map((u) => {
+      if (u.id === accountData.id) {
+        if (makeDefault) chosenUpi = accountData.upiId;
+        return {
+          ...u,
+          label: accountData.label,
+          upiId: accountData.upiId,
+          customQrImage: accountData.customQrImage,
+          isDefault: makeDefault || u.isDefault,
+        };
+      }
+      return makeDefault ? { ...u, isDefault: false } : u;
+    });
+
+    updateAccount({
+      upiId: chosenUpi,
+      upiAccounts: updatedList,
+    });
+  };
+
   return {
     accounts,
     currentAccount,
@@ -330,6 +363,7 @@ export function useAuthStore() {
     setLoggedInAccount,
     updateAccount,
     addUPIAccount,
+    updateUPIAccount,
     deleteUPIAccount,
     setDefaultUPIAccount,
   };

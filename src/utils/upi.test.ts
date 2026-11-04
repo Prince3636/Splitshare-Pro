@@ -28,3 +28,4 @@ describe('UPI Intent and Scheme Generator', () => {
     expect(paytmUri.startsWith('paytmmp://pay?')).toBe(true);
   });
 });
+

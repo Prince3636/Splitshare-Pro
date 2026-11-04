@@ -68,3 +68,4 @@ export function sendLocalPushNotification({ title, body, tag, icon, data }: Noti
     return false;
   }
 }
+
