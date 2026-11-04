@@ -425,6 +425,24 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             ) : mode === 'SIGNIN' ? (
               /* SIGN IN FORM */
               <form onSubmit={handleSignIn} className="space-y-3.5">
+                {/* 1-Click Demo Fill Banner */}
+                <div className="p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-100 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium truncate">
+                    <span className="text-sm">⚡</span>
+                    <span className="truncate">Demo: <strong className="text-slate-900 font-bold">demo</strong> • <strong className="text-slate-900 font-bold">demo123</strong></span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginIdentifier('demo');
+                      setLoginPassword('demo123');
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shrink-0 transition-all active:scale-95 shadow-2xs"
+                  >
+                    Autofill
+                  </button>
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
                     Mobile No., Username, or Email

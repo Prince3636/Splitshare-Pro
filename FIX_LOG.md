@@ -155,6 +155,47 @@ This log tracks every change made during the execution of the 4-phase fix roadma
 
 ---
 
+## 🎨 Log Entry: Phase 5 — Google Play Store Asset Delivery & UI/UX De-Cluttering
+- **Status:** COMPLETED ✅
+- **Summary of Changes:**
+  1. **Google Play Console Official Visual Assets:**
+     - `android/play-store-assets/icon-512.png` & `icon-512.svg`: Official 512x512 32-bit PNG high-resolution store icon.
+     - `android/play-store-assets/feature-graphic.png` & `feature-graphic.svg`: Official 1024x500 RGB PNG store feature graphic.
+     - `public/favicon.svg`: Branded SplitShare vector icon.
+  2. **Android Adaptive Icons & Full Mipmap Density Generation:**
+     - Created vector adaptive launcher foreground `ic_launcher_foreground.xml` and background `#0f172a`.
+     - Generated high-resolution fallback raster PNGs for mdpi (48px), hdpi (72px), xhdpi (96px), xxhdpi (144px), xxxhdpi (192px) with circular and squircle launcher variants.
+  3. **UI/UX Text De-Cluttering & Simplification:**
+     - `Header.tsx`: Removed redundant "Live" tag next to logo for a sleek, mature brand appearance.
+     - `AuthScreen.tsx`: Removed bulky promotional copy card; simplified hero subtitle to *"Simple group expense splitting"*.
+     - `GroupsListView.tsx`: Replaced 15-line 3-step instructional empty state with a clean fintech card (*"No groups yet • Create a group to start splitting bills and settling balances"*).
+     - `ProfileView.tsx`: Simplified payment section to *"Payment Accounts"*, changed button to *"+ Add UPI"*, and streamlined QR code preview modal.
+     - `App.tsx`: Real-time sticky top offline mode indicator.
+
+---
+
+## ⚡ Log Entry: Phase 6 — UX Delight Features & Deep Verification
+- **Status:** COMPLETED ✅
+- **Summary of Changes:**
+  1. **Smart Category Auto-Detection (`AddExpenseModal.tsx`):**
+     - Automatically infers expense category from input keywords (e.g. "Pizza" -> Food, "Uber" -> Travel, "Zepto" -> Groceries, "Netflix" -> Entertainment, "Hotel" -> Stay).
+  2. **Quick Amount Suggestion & Increment Chips (`AddExpenseModal.tsx`):**
+     - Instant preset chips (`₹100`, `₹200`, `₹500`, `₹1,000`, `₹2,000`) and quick increments (`+₹50`, `+₹100`, `+₹500`) for one-tap bill amount entry.
+  3. **Equal Split Quick Selectors (`AddExpenseModal.tsx`):**
+     - One-tap "Select All" and "Only Me" controls for customized equal splits in large groups.
+  4. **Native Android / Web Share Integration (`GroupDetailView.tsx`):**
+     - Integrated `navigator.share` sheet for direct 1-tap WhatsApp/Telegram/system sharing with automatic clipboard fallback.
+  5. **Real-time Expense Sorting Toggle (`GroupDetailView.tsx`):**
+     - Added instant toggle for *Newest Bills* vs *Highest Amount (₹)*.
+  6. **Group Search Bar (`GroupsListView.tsx`):**
+     - Instant real-time group search filtering with clear button.
+  7. **Personalized Balance Microcopy (`GroupsListView.tsx`, `GroupDetailView.tsx`):**
+     - Updated 3rd-person phrasing to direct, clear *"You get back"* and *"You owe"*.
+  8. **Terminology Cleanup (`SettleUpModal.tsx`):**
+     - Replaced legacy barcode mentions with modern *"QR Code"*.
+
+---
+
 ## 📊 Summary of Verification & Test Results
 | Test / Build Step | Command | Result | Details |
 |---|---|---|---|
@@ -162,5 +203,6 @@ This log tracks every change made during the execution of the 4-phase fix roadma
 | Frontend TypeCheck & Bundle | `npm run build` | ✅ PASS | Main chunk: 264.9 kB (82.9 kB gzip) |
 | Backend Syntax & Runtime | `npx tsx --eval ...` | ✅ PASS | Clean startup |
 | Capacitor Android Sync | `npx cap sync android` | ✅ PASS | Finished in 0.26s |
+| Play Store Icon Assets | `Test-Path android/play-store-assets/*.png` | ✅ PASS | 512x512 icon & 1024x500 feature graphic |
 | Play Store Icon Assets | `Test-Path android/play-store-assets/*.png` | ✅ PASS | 512x512 icon & 1024x500 feature graphic |
 | Legal Pages Validation | `Test-Path public/*.html` | ✅ PASS | Privacy policy & deletion portal ready |

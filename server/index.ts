@@ -49,6 +49,111 @@ function loadDatabase() {
 
 let db = loadDatabase();
 
+function ensureDemoAccount() {
+  if (!db.accounts || db.accounts.length === 0) {
+    const demoPassHash = bcrypt.hashSync('demo123', 10);
+    const demoUser = {
+      id: 'u_demo_1',
+      username: 'demo',
+      email: 'demo@splitshare.com',
+      password: demoPassHash,
+      name: 'Demo User',
+      avatar: '👨‍💻',
+      upiId: 'demo@upi',
+      phone: '9876543210',
+      upiAccounts: [
+        {
+          id: 'upi_demo_1',
+          label: 'Google Pay',
+          upiId: 'demo@upi',
+          isDefault: true,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      createdAt: new Date().toISOString(),
+    };
+
+    const friendUser = {
+      id: 'u_demo_2',
+      username: 'rahul',
+      email: 'rahul@splitshare.com',
+      password: demoPassHash,
+      name: 'Rahul Sharma',
+      avatar: '😎',
+      upiId: 'rahul@okhdfcbank',
+      phone: '9876543211',
+      upiAccounts: [
+        {
+          id: 'upi_demo_2',
+          label: 'Paytm',
+          upiId: 'rahul@okhdfcbank',
+          isDefault: true,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      createdAt: new Date().toISOString(),
+    };
+
+    const sampleGroup = {
+      id: 'g_goa_trip',
+      name: 'Goa Trip 🏖️',
+      emoji: '🏖️',
+      description: 'Weekend trip with friends',
+      createdBy: 'u_demo_1',
+      targetBudget: 15000,
+      members: [
+        {
+          id: 'u_demo_1',
+          name: 'Demo User',
+          avatar: '👨‍💻',
+          color: 'from-emerald-500 to-teal-600',
+          email: 'demo@splitshare.com',
+          upiId: 'demo@upi',
+          phone: '9876543210',
+        },
+        {
+          id: 'u_demo_2',
+          name: 'Rahul Sharma',
+          avatar: '😎',
+          color: 'from-blue-500 to-indigo-600',
+          email: 'rahul@splitshare.com',
+          upiId: 'rahul@okhdfcbank',
+          phone: '9876543211',
+        },
+      ],
+      createdAt: new Date().toISOString(),
+    };
+
+    const sampleExpense = {
+      id: 'exp_shack_dinner',
+      groupId: 'g_goa_trip',
+      title: 'Beach Shack Dinner',
+      amount: 1500,
+      paidById: 'u_demo_1',
+      date: new Date().toISOString(),
+      category: 'food',
+      splitType: 'EQUAL',
+      splits: [
+        { memberId: 'u_demo_1', amount: 750 },
+        { memberId: 'u_demo_2', amount: 750 },
+      ],
+      status: 'CONFIRMED',
+      requiresApproval: false,
+      approvals: {
+        u_demo_1: { memberId: 'u_demo_1', status: 'ACCEPTED' },
+        u_demo_2: { memberId: 'u_demo_2', status: 'ACCEPTED' },
+      },
+      notes: 'Seafood, juices & snacks',
+    };
+
+    db.accounts = [demoUser, friendUser];
+    db.groups = [sampleGroup];
+    db.expenses = [sampleExpense];
+    saveDatabase();
+  }
+}
+ensureDemoAccount();
+
 function saveDatabase() {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
