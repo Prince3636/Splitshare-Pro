@@ -231,13 +231,19 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
               <QrCode size={16} className="text-emerald-600" />
               Scan {selectedAccount?.label || ''} QR Code
             </div>
-            <div className="inline-block p-2 bg-white rounded-xl shadow-xs border border-slate-200">
-              <img
-                src={qrUrl}
-                alt="UPI QR Code"
-                className="w-44 h-44 mx-auto object-contain rounded-lg"
-                loading="lazy"
-              />
+            <div className="inline-block p-2 bg-white rounded-xl shadow-xs border border-slate-200 min-w-[176px] min-h-[176px] flex items-center justify-center">
+              {qrUrl ? (
+                <img
+                  src={qrUrl}
+                  alt="UPI QR Code"
+                  className="w-44 h-44 mx-auto object-contain rounded-lg"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="w-44 h-44 flex items-center justify-center text-slate-400">
+                  <QrCode size={36} className="animate-pulse" />
+                </div>
+              )}
             </div>
             <p className="text-[10px] text-slate-400 mt-2 font-medium">
               Scan with any UPI scanner to pay directly to {activeUpiId}

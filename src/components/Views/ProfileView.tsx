@@ -427,7 +427,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         ) : (
           <div className="space-y-3">
             {upiList.map((acc) => {
-              const displayQr = qrMap[acc.id] || acc.customQrImage || '';
+              const displayQr = qrMap[acc.id] || acc.customQrImage || null;
 
               return (
                 <div
@@ -442,24 +442,32 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     <div className="flex items-start gap-3">
                       {/* Barcode / QR Thumbnail with Zoom on Click */}
                       <div
-                        onClick={() =>
-                          setZoomQr({
-                            label: acc.label,
-                            upiId: acc.upiId,
-                            qrUrl: displayQr,
-                          })
-                        }
+                        onClick={() => {
+                          if (displayQr) {
+                            setZoomQr({
+                              label: acc.label,
+                              upiId: acc.upiId,
+                              qrUrl: displayQr,
+                            });
+                          }
+                        }}
                         className="relative group cursor-pointer w-16 h-16 rounded-xl bg-white p-1 border border-slate-200 shadow-xs shrink-0 flex items-center justify-center overflow-hidden"
-                        title="Click to expand barcode"
+                        title={displayQr ? "Click to expand QR code" : "Generating QR code..."}
                       >
-                        <img
-                          src={displayQr}
-                          alt={acc.label}
-                          className="w-full h-full object-contain"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
-                          <Maximize2 size={14} />
-                        </div>
+                        {displayQr ? (
+                          <>
+                            <img
+                              src={displayQr}
+                              alt={acc.label}
+                              className="w-full h-full object-contain"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                              <Maximize2 size={14} />
+                            </div>
+                          </>
+                        ) : (
+                          <QrCode size={22} className="text-slate-400 animate-pulse" />
+                        )}
                       </div>
 
                       <div>
@@ -492,13 +500,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                           </button>
 
                           <button
-                            onClick={() =>
-                              setZoomQr({
-                                label: acc.label,
-                                upiId: acc.upiId,
-                                qrUrl: displayQr,
-                              })
-                            }
+                            onClick={() => {
+                              if (displayQr) {
+                                setZoomQr({
+                                  label: acc.label,
+                                  upiId: acc.upiId,
+                                  qrUrl: displayQr,
+                                });
+                              }
+                            }}
                             className="text-[10px] font-bold text-emerald-700 hover:underline flex items-center gap-0.5"
                           >
                             <Maximize2 size={10} />
@@ -560,12 +570,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </button>
             </div>
 
-            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 inline-block">
-              <img
-                src={zoomQr.qrUrl}
-                alt="QR Code"
-                className="w-52 h-52 mx-auto object-contain rounded-xl"
-              />
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 inline-block min-w-[208px] min-h-[208px] flex items-center justify-center">
+              {zoomQr.qrUrl ? (
+                <img
+                  src={zoomQr.qrUrl}
+                  alt="QR Code"
+                  className="w-52 h-52 mx-auto object-contain rounded-xl"
+                />
+              ) : (
+                <QrCode size={40} className="text-slate-400 animate-pulse" />
+              )}
             </div>
 
             <p className="font-mono text-xs font-extrabold text-slate-900">{zoomQr.upiId}</p>
