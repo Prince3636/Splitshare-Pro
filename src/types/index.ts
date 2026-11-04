@@ -151,3 +151,14 @@ export interface AppNotification {
   createdAt: string;
   read: boolean;
 }
+
+export interface ChatMessage {
+  id: string;
+  groupId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  text: string;
+  mediaUrl?: string;
+  createdAt: string;
+}

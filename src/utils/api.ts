@@ -205,6 +205,17 @@ export async function apiAddKittyExpense(data: any) {
   });
 }
 
+export async function apiGetGroupMessages(groupId: string) {
+  return apiFetch(`/api/groups/${groupId}/messages`);
+}
+
+export async function apiSendGroupMessage(groupId: string, data: { text: string; mediaUrl?: string }) {
+  return apiFetch(`/api/groups/${groupId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 /**
  * Connect to WebSocket with JWT auth & exponential backoff
  */

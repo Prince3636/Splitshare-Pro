@@ -69,6 +69,8 @@ export const App: React.FC = () => {
     kittyExpenses,
     addKittyContribution,
     addKittyExpense,
+    messages,
+    sendGroupChatMessage,
     clearAllData,
   } = useAppStore(currentAccount);
 
@@ -289,6 +291,8 @@ export const App: React.FC = () => {
                   settlements={settlements}
                   kittyContributions={kittyContributions}
                   kittyExpenses={kittyExpenses}
+                  messages={messages.filter((m) => m.groupId === activeSelectedGroup.id)}
+                  onSendMessage={(text, mediaUrl) => sendGroupChatMessage(activeSelectedGroup.id, text, mediaUrl)}
                   onOpenAddExpense={() => setIsAddExpenseOpen(true)}
                   onOpenSettleModal={handleOpenSettle}
                   onOpenKittyModal={() => setIsKittyOpen(true)}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Group, Member, Expense, Settlement, KittyContribution, KittyExpense } from '../../types';
+import { Group, Member, Expense, Settlement, KittyContribution, KittyExpense, ChatMessage } from '../../types';
 import { calculateBalances } from '../../utils/debtSimplifier';
 import { formatCurrency, formatRelativeDate, CATEGORY_DETAILS } from '../../utils/formatters';
 import { formatForeignExpense } from '../../utils/currencies';
@@ -27,7 +27,9 @@ import {
   FileText,
   ArrowUpDown,
   X,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Send,
+  Paperclip
 } from 'lucide-react';
 import { generateWhatsAppNudge } from '../../utils/whatsapp';
 import { generateGroupWhatsAppSummary, downloadGroupCSV } from '../../utils/exportSummary';
@@ -41,6 +43,8 @@ interface GroupDetailViewProps {
   settlements: Settlement[];
   kittyContributions: KittyContribution[];
   kittyExpenses: KittyExpense[];
+  messages?: ChatMessage[];
+  onSendMessage?: (text: string, mediaUrl?: string) => void;
   onOpenAddExpense: () => void;
   onOpenSettleModal: (debtor: Member, creditor: Member, amount: number) => void;
   onOpenKittyModal: () => void;
@@ -52,7 +56,7 @@ interface GroupDetailViewProps {
   onLeaveGroup: (groupId: string) => void;
 }
 
-type GroupSubTab = 'expenses' | 'balances' | 'kitty' | 'analytics';
+type GroupSubTab = 'expenses' | 'balances' | 'kitty' | 'chat' | 'analytics';
 
 export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   group,
@@ -62,6 +66,8 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   settlements,
   kittyContributions,
   kittyExpenses,
+  messages = [],
+  onSendMessage,
   onOpenAddExpense,
   onOpenSettleModal,
   onOpenKittyModal,
@@ -83,11 +89,58 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState<'newest' | 'highest'>('newest');
 
+  // Chat state
+  const [chatText, setChatText] = useState('');
+  const [chatMedia, setChatMedia] = useState<string | null>(null);
+
   // Filter for this group
   const groupExpenses = expenses.filter((e) => e.groupId === group.id);
   const groupSettlements = settlements.filter((s) => s.groupId === group.id);
   const groupKittyContr = kittyContributions.filter((k) => k.groupId === group.id);
   const groupKittyExp = kittyExpenses.filter((ke) => ke.groupId === group.id);
+  const groupMessages = messages.filter((m) => m.groupId === group.id);
+
+  const handleSendChat = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!chatText.trim() && !chatMedia) return;
+    if (onSendMessage) {
+      onSendMessage(chatText.trim(), chatMedia || undefined);
+    }
+    setChatText('');
+    setChatMedia(null);
+  };
+
+  const handleChatPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 800;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, w, h);
+        setChatMedia(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Group members list
   const memberIds = group.members.map((m) => m.id);
@@ -357,6 +410,17 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
           >
             <PiggyBank size={14} className="shrink-0" />
             <span>Kitty</span>
+          </button>
+          <button
+            onClick={() => setSubTab('chat')}
+            className={`flex-1 py-2 px-1 rounded-xl flex items-center justify-center gap-1 transition-all whitespace-nowrap ${
+              subTab === 'chat'
+                ? 'bg-white text-emerald-700 shadow-xs'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            <MessageCircle size={14} className="shrink-0" />
+            <span>Chat{groupMessages.length > 0 ? ` (${groupMessages.length})` : ''}</span>
           </button>
           <button
             onClick={() => setSubTab('analytics')}
@@ -819,7 +883,183 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
           </div>
         )}
 
-        {/* TAB 4: ANALYTICS & STATS */}
+        {/* TAB 4: GROUP CHAT & BILL DISCUSSIONS */}
+        {subTab === 'chat' && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col h-[520px] overflow-hidden animate-in fade-in">
+            {/* Chat Header */}
+            <div className="p-3 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
+                  <MessageCircle size={16} />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-800 leading-tight">
+                    {group.name} Chat
+                  </h3>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    {group.members.length} members • Real-time discussion
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Nudge Suggestions */}
+              <div className="flex gap-1">
+                {['Payment done! 💸', 'Check bill 👍'].map((chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => {
+                      if (onSendMessage) onSendMessage(chip);
+                    }}
+                    className="hidden sm:inline-flex px-2 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-[10px] font-bold text-slate-600 rounded-lg transition-colors active:scale-95"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Chat Messages List */}
+            <div className="flex-1 p-3 overflow-y-auto space-y-3 bg-slate-50/40">
+              {groupMessages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400 space-y-2">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <MessageCircle size={24} />
+                  </div>
+                  <p className="text-xs font-bold text-slate-700">No messages yet in this group</p>
+                  <p className="text-[11px] text-slate-500 max-w-xs">
+                    Discuss bill splits, notify friends when you've paid via UPI, or share receipts!
+                  </p>
+                  <div className="flex gap-1.5 pt-2">
+                    {['Hi everyone! 👋', 'I paid via GPay 💸', 'Please check the bill 🧾'].map((quick) => (
+                      <button
+                        key={quick}
+                        onClick={() => {
+                          if (onSendMessage) onSendMessage(quick);
+                        }}
+                        className="px-2.5 py-1 bg-white border border-slate-200 hover:border-emerald-300 text-[11px] font-bold text-slate-700 rounded-xl shadow-2xs transition-all active:scale-95"
+                      >
+                        {quick}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                groupMessages.map((msg) => {
+                  const isMe = msg.senderId === currentUser.id;
+
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1`}
+                    >
+                      {!isMe && (
+                        <div className="flex items-center gap-1.5 px-1">
+                          <span className="text-xs">{msg.senderAvatar || '👤'}</span>
+                          <span className="text-[10px] font-bold text-slate-600">
+                            {msg.senderName}
+                          </span>
+                        </div>
+                      )}
+
+                      <div
+                        className={`max-w-[80%] rounded-2xl p-3 shadow-2xs space-y-1.5 ${
+                          isMe
+                            ? 'bg-emerald-600 text-white rounded-tr-xs'
+                            : 'bg-white border border-slate-200 text-slate-800 rounded-tl-xs'
+                        }`}
+                      >
+                        {msg.mediaUrl && (
+                          <div
+                            onClick={() => setViewingProof(msg.mediaUrl || null)}
+                            className="cursor-pointer rounded-xl overflow-hidden bg-slate-900 max-h-48 group relative"
+                            title="Tap to enlarge"
+                          >
+                            <img
+                              src={msg.mediaUrl}
+                              alt="Shared Receipt"
+                              className="w-full max-h-48 object-cover group-hover:scale-105 transition-transform"
+                            />
+                          </div>
+                        )}
+
+                        {msg.text && (
+                          <p className="text-xs font-medium leading-relaxed whitespace-pre-wrap break-words">
+                            {msg.text}
+                          </p>
+                        )}
+
+                        <div className={`flex items-center justify-end gap-1 text-[9px] ${
+                          isMe ? 'text-emerald-100' : 'text-slate-400'
+                        }`}>
+                          <span>
+                            {new Date(msg.createdAt).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          {isMe && <Check size={11} className="inline text-emerald-200" />}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Media Attachment Preview if uploaded */}
+            {chatMedia && (
+              <div className="px-3 pt-2 bg-white border-t border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <img
+                    src={chatMedia}
+                    alt="Upload Preview"
+                    className="w-10 h-10 object-cover rounded-lg border border-slate-200"
+                  />
+                  <span className="text-[11px] font-bold text-slate-600">Receipt / Image attached</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setChatMedia(null)}
+                  className="text-slate-400 hover:text-rose-600 p-1"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+
+            {/* Input Bar */}
+            <form onSubmit={handleSendChat} className="p-2.5 bg-white border-t border-slate-200 flex items-center gap-2">
+              <label className="cursor-pointer text-slate-400 hover:text-emerald-600 p-2 rounded-xl hover:bg-slate-50 transition-colors shrink-0" title="Attach Receipt/Photo">
+                <Paperclip size={18} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleChatPhotoUpload}
+                  className="hidden"
+                />
+              </label>
+
+              <input
+                type="text"
+                placeholder="Type a message..."
+                value={chatText}
+                onChange={(e) => setChatText(e.target.value)}
+                className="flex-1 px-3.5 py-2.5 bg-slate-100 rounded-xl text-xs font-medium focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-emerald-500/20 border border-transparent focus:border-emerald-500 transition-all"
+              />
+
+              <button
+                type="submit"
+                disabled={!chatText.trim() && !chatMedia}
+                className="w-9 h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white flex items-center justify-center shrink-0 shadow-xs transition-all active:scale-95"
+                title="Send Message"
+              >
+                <Send size={15} />
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* TAB 5: ANALYTICS & STATS */}
         {subTab === 'analytics' && (
           <div className="space-y-3">
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs">

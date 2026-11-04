@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import mongoose, { Schema } from 'mongoose';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +25,20 @@ if (!fs.existsSync(DATA_DIR)) {
 // Secure JWT Secret from environment (never hardcode in production)
 const JWT_SECRET = process.env.JWT_SECRET || 'splitshare-prod-secret-key-change-in-env-984729';
 
+// MongoDB Atlas Configuration & Flexible Auto-Sync
+const MONGODB_URI = process.env.MONGODB_URI || '';
+let isMongoConnected = false;
+
+const MongoAccount = mongoose.model('Account', new Schema({}, { strict: false }));
+const MongoGroup = mongoose.model('Group', new Schema({}, { strict: false }));
+const MongoExpense = mongoose.model('Expense', new Schema({}, { strict: false }));
+const MongoSettlement = mongoose.model('Settlement', new Schema({}, { strict: false }));
+const MongoKittyContribution = mongoose.model('KittyContribution', new Schema({}, { strict: false }));
+const MongoKittyExpense = mongoose.model('KittyExpense', new Schema({}, { strict: false }));
+const MongoInvite = mongoose.model('Invite', new Schema({}, { strict: false }));
+const MongoNotification = mongoose.model('Notification', new Schema({}, { strict: false }));
+const MongoMessage = mongoose.model('ChatMessage', new Schema({}, { strict: false }));
+
 const INITIAL_DATA = {
   accounts: [],
   groups: [],
@@ -33,6 +48,7 @@ const INITIAL_DATA = {
   kittyExpenses: [],
   invites: [],
   notifications: [],
+  messages: [],
 };
 
 function loadDatabase() {
@@ -49,10 +65,92 @@ function loadDatabase() {
 
 let db = loadDatabase();
 
+async function syncMongoToMemory() {
+  try {
+    const [accounts, groups, expenses, settlements, kittyContributions, kittyExpenses, invites, notifications, messages] =
+      await Promise.all([
+        MongoAccount.find({}).lean(),
+        MongoGroup.find({}).lean(),
+        MongoExpense.find({}).lean(),
+        MongoSettlement.find({}).lean(),
+        MongoKittyContribution.find({}).lean(),
+        MongoKittyExpense.find({}).lean(),
+        MongoInvite.find({}).lean(),
+        MongoNotification.find({}).lean(),
+        MongoMessage.find({}).lean(),
+      ]);
+
+    db.accounts = accounts.map(({ _id, __v, ...rest }: any) => rest);
+    db.groups = groups.map(({ _id, __v, ...rest }: any) => rest);
+    db.expenses = expenses.map(({ _id, __v, ...rest }: any) => rest);
+    db.settlements = settlements.map(({ _id, __v, ...rest }: any) => rest);
+    db.kittyContributions = kittyContributions.map(({ _id, __v, ...rest }: any) => rest);
+    db.kittyExpenses = kittyExpenses.map(({ _id, __v, ...rest }: any) => rest);
+    db.invites = invites.map(({ _id, __v, ...rest }: any) => rest);
+    db.notifications = notifications.map(({ _id, __v, ...rest }: any) => rest);
+    db.messages = messages.map(({ _id, __v, ...rest }: any) => rest);
+
+    console.log('🍃 Loaded database state from MongoDB Atlas.');
+    saveDatabase();
+    broadcastScopedState();
+  } catch (err: any) {
+    console.error('Error syncing from MongoDB:', err.message);
+  }
+}
+
+if (MONGODB_URI) {
+  mongoose
+    .connect(MONGODB_URI)
+    .then(() => {
+      isMongoConnected = true;
+      console.log('🍃 MongoDB Atlas Connected Successfully!');
+      syncMongoToMemory();
+    })
+    .catch((err) => {
+      console.error('⚠️ MongoDB connection error, falling back to local database:', err.message);
+    });
+} else {
+  console.log('ℹ️ Running on local database. Set MONGODB_URI in .env to connect MongoDB Atlas.');
+}
+
+async function syncMemoryToMongo() {
+  if (!isMongoConnected) return;
+  const collections = [
+    { model: MongoAccount, data: db.accounts, key: 'id' },
+    { model: MongoGroup, data: db.groups, key: 'id' },
+    { model: MongoExpense, data: db.expenses, key: 'id' },
+    { model: MongoSettlement, data: db.settlements, key: 'id' },
+    { model: MongoKittyContribution, data: db.kittyContributions, key: 'id' },
+    { model: MongoKittyExpense, data: db.kittyExpenses, key: 'id' },
+    { model: MongoInvite, data: db.invites, key: 'id' },
+    { model: MongoNotification, data: db.notifications, key: 'id' },
+    { model: MongoMessage, data: db.messages || [], key: 'id' },
+  ];
+
+  for (const { model, data, key } of collections) {
+    if (!data || data.length === 0) continue;
+    const ops = data.map((item: any) => ({
+      updateOne: {
+        filter: { [key]: item[key] },
+        update: { $set: item },
+        upsert: true,
+      },
+    }));
+    await (model as any).bulkWrite(ops);
+  }
+}
+
 function saveDatabase() {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
   } catch (e) {
+    console.error('Error saving database:', e);
+  }
+
+  if (isMongoConnected) {
+    syncMemoryToMongo().catch((err) => console.error('Error syncing to MongoDB:', err.message));
+  }
+}
     console.error('Error saving database:', e);
   }
 }
@@ -97,6 +195,8 @@ function getScopedStateForUser(userId: string, userEmail?: string) {
       (cleanEmail && n.recipientEmail && n.recipientEmail.toLowerCase() === cleanEmail)
   );
 
+  const userMessages = (db.messages || []).filter((m: any) => userGroupIds.has(m.groupId));
+
   // Return public sanitized profiles of members in user's groups
   const visibleMemberIds = new Set<string>();
   userGroups.forEach((g: any) => {
@@ -116,6 +216,7 @@ function getScopedStateForUser(userId: string, userEmail?: string) {
     kittyExpenses: userKittyExp,
     invites: userInvites,
     notifications: userNotifications,
+    messages: userMessages,
   };
 }
 
@@ -852,6 +953,54 @@ app.post('/api/kitty/expense', requireAuth, (req: AuthenticatedRequest, res: Res
   broadcastScopedState();
 
   res.json({ success: true, expense });
+});
+
+// --- GROUP CHAT ENDPOINTS ---
+
+// Get group chat messages
+app.get('/api/groups/:groupId/messages', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const { groupId } = req.params;
+  const group = (db.groups || []).find((g: any) => g.id === groupId);
+  if (!group || !(group.members || []).some((m: any) => m.id === req.user!.id)) {
+    return res.status(403).json({ success: false, error: 'Access denied to group chat.' });
+  }
+
+  const groupMsgs = (db.messages || []).filter((m: any) => m.groupId === groupId);
+  res.json({ success: true, data: groupMsgs });
+});
+
+// Send group chat message (Text + optional receipt/media)
+app.post('/api/groups/:groupId/messages', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+  const { groupId } = req.params;
+  const { text, mediaUrl } = req.body;
+  if (!text?.trim() && !mediaUrl) {
+    return res.status(400).json({ success: false, error: 'Message text or media is required.' });
+  }
+
+  const group = (db.groups || []).find((g: any) => g.id === groupId);
+  if (!group || !(group.members || []).some((m: any) => m.id === req.user!.id)) {
+    return res.status(403).json({ success: false, error: 'Access denied to group chat.' });
+  }
+
+  const sender = (db.accounts || []).find((a: any) => a.id === req.user!.id);
+
+  const message = {
+    id: 'msg_' + crypto.randomUUID(),
+    groupId,
+    senderId: req.user!.id,
+    senderName: sender?.name || req.user!.username || 'Member',
+    senderAvatar: sender?.avatar || '😎',
+    text: (text || '').trim(),
+    mediaUrl: mediaUrl || undefined,
+    createdAt: new Date().toISOString(),
+  };
+
+  if (!db.messages) db.messages = [];
+  db.messages.push(message);
+  saveDatabase();
+  broadcastScopedState();
+
+  res.json({ success: true, message });
 });
 
 // NOTE: Dangerous unauthenticated /api/reset endpoint has been PERMANENTLY REMOVED.

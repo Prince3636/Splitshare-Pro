@@ -10,6 +10,7 @@ import {
   GroupInvite,
   AppNotification,
   UserAccount,
+  ChatMessage,
 } from '../types';
 import {
   fetchState,
@@ -27,6 +28,7 @@ import {
   apiRecordSettlement,
   apiAddKittyContribution,
   apiAddKittyExpense,
+  apiSendGroupMessage,
 } from '../utils/api';
 import { sendLocalPushNotification } from '../utils/notifications';
 
@@ -50,6 +52,7 @@ export function useAppStore(currentAccount: UserAccount | null) {
       kittyExpenses: [],
       invites: [],
       notifications: [],
+      messages: [],
     };
   };
 
@@ -91,6 +94,7 @@ export function useAppStore(currentAccount: UserAccount | null) {
             kittyExpenses: res.data.kittyExpenses || [],
             invites: res.data.invites || [],
             notifications: res.data.notifications || [],
+            messages: res.data.messages || [],
           });
         }
       })
@@ -129,6 +133,7 @@ export function useAppStore(currentAccount: UserAccount | null) {
           kittyExpenses: serverData.kittyExpenses || [],
           invites: serverData.invites || [],
           notifications: serverData.notifications || [],
+          messages: serverData.messages || [],
         });
       }
     });
@@ -523,6 +528,36 @@ export function useAppStore(currentAccount: UserAccount | null) {
     }
   };
 
+  const sendGroupChatMessage = async (groupId: string, text: string, mediaUrl?: string) => {
+    const tempMsg: ChatMessage = {
+      id: 'msg_' + Date.now(),
+      groupId,
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      senderAvatar: currentUser.avatar || '😎',
+      text,
+      mediaUrl,
+      createdAt: new Date().toISOString(),
+    };
+
+    setState((prev: any) => ({
+      ...prev,
+      messages: [...(prev.messages || []), tempMsg],
+    }));
+
+    try {
+      const res = await apiSendGroupMessage(groupId, { text, mediaUrl });
+      if (res?.message) {
+        setState((prev: any) => ({
+          ...prev,
+          messages: [...(prev.messages || []).filter((m: any) => m.id !== tempMsg.id), res.message],
+        }));
+      }
+    } catch (e) {
+      console.error('Failed to send group chat message:', e);
+    }
+  };
+
   return {
     currentUser,
     groups: myGroups,
@@ -546,6 +581,8 @@ export function useAppStore(currentAccount: UserAccount | null) {
     kittyExpenses: myKittyExpenses,
     addKittyContribution,
     addKittyExpense,
+    messages: (state.messages || []) as ChatMessage[],
+    sendGroupChatMessage,
     clearAllData,
   };
 }
