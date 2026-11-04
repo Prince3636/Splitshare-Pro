@@ -10,6 +10,12 @@ import {
   detectGPSLocationCurrency,
   DetectedLocationInfo,
 } from '../../utils/currencies';
+import {
+  isNotificationSupported,
+  getNotificationPermission,
+  requestNotificationPermission,
+  sendLocalPushNotification,
+} from '../../utils/notifications';
 import { 
   UserCheck, 
   QrCode, 
@@ -22,13 +28,21 @@ import {
   Plus, 
   Upload, 
   Star, 
-  Smartphone,
-  Maximize2,
-  X,
-  LogOut,
-  Globe,
-  MapPin,
-  Navigation
+  Smartphone, 
+  Maximize2, 
+  X, 
+  LogOut, 
+  Globe, 
+  MapPin, 
+  Navigation,
+  ChevronRight,
+  Bell,
+  Shield,
+  Layers,
+  Receipt,
+  ArrowRightLeft,
+  AlertTriangle,
+  ExternalLink
 } from 'lucide-react';
 
 interface ProfileViewProps {
@@ -81,6 +95,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [phone, setPhone] = useState(currentUser.phone || '');
   const [qrMap, setQrMap] = useState<Record<string, string>>({});
 
+  // Modals state
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
+
   // Add new UPI account modal / form
   const [showAddUpi, setShowAddUpi] = useState(false);
   const [newLabel, setNewLabel] = useState('Paytm');
@@ -105,6 +123,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   // Currency & Location state
   const [detectedLocation, setDetectedLocation] = useState<DetectedLocationInfo>(() => detectLocationCurrency());
   const [isGpsDetecting, setIsGpsDetecting] = useState(false);
+  const [selectedCurrency, setSelectedCurrency] = useState<string>(
+    currentUser.preferredCurrency || detectedLocation.currencyCode || 'INR'
+  );
+
+  // Notification status
+  const [notifPermission, setNotifPermission] = useState<string>(() => getNotificationPermission());
 
   const activePrefCurrency = currentUser.preferredCurrency || detectedLocation.currencyCode || 'INR';
 
@@ -251,8 +275,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     setEditingUpiAccount(null);
   };
 
-  const handleCurrencyChange = (newCode: string) => {
+  const handleApplyCurrencyChange = (newCode: string) => {
+    setSelectedCurrency(newCode);
     onUpdateProfile({ preferredCurrency: newCode });
+    setShowCurrencyModal(false);
   };
 
   const handleGPSDetect = async () => {
@@ -261,20 +287,41 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       const gpsResult = await detectGPSLocationCurrency();
       if (gpsResult) {
         setDetectedLocation(gpsResult);
+        setSelectedCurrency(gpsResult.currencyCode);
         onUpdateProfile({ preferredCurrency: gpsResult.currencyCode });
       } else {
         alert(`Location detected from device timezone: ${detectedLocation.locationDetail}`);
       }
     } catch {
-      alert('Location detection unavailable.');
+      alert('GPS location detection unavailable.');
     } finally {
       setIsGpsDetecting(false);
     }
   };
 
+  const handleToggleNotifications = async () => {
+    if (!isNotificationSupported()) {
+      alert('Push notifications are not supported on this browser.');
+      return;
+    }
+
+    const granted = await requestNotificationPermission();
+    const updated = getNotificationPermission();
+    setNotifPermission(updated);
+
+    if (granted) {
+      sendLocalPushNotification({
+        title: 'Push Alerts Enabled! 🔔',
+        body: 'SplitShare will notify you in real-time for bills and settlements.',
+      });
+    }
+  };
+
+  const currencyConfig = getCurrencyConfig(activePrefCurrency);
+
   return (
     <div className="max-w-md mx-auto px-4 py-4 space-y-4 pb-28">
-      {/* Profile Card with Mobile Number */}
+      {/* 1. Profile Header Card */}
       <div className="bg-gradient-to-tr from-emerald-600 to-teal-800 text-white rounded-3xl p-5 shadow-lg relative">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -331,6 +378,22 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         </div>
 
+        {/* Quick Stats Summary Bar */}
+        <div className="mt-4 pt-3 border-t border-white/15 grid grid-cols-3 gap-2 text-center">
+          <div className="bg-white/10 rounded-xl p-2 backdrop-blur-xs">
+            <span className="text-sm font-extrabold block">{groups.length}</span>
+            <span className="text-[10px] text-emerald-100 font-medium">Active Groups</span>
+          </div>
+          <div className="bg-white/10 rounded-xl p-2 backdrop-blur-xs">
+            <span className="text-sm font-extrabold block">{expenses.length}</span>
+            <span className="text-[10px] text-emerald-100 font-medium">Total Bills</span>
+          </div>
+          <div className="bg-white/10 rounded-xl p-2 backdrop-blur-xs">
+            <span className="text-sm font-extrabold block">{settlements.length}</span>
+            <span className="text-[10px] text-emerald-100 font-medium">Settled Up</span>
+          </div>
+        </div>
+
         {/* Edit Profile Form */}
         {isEditing && (
           <form onSubmit={handleSaveProfile} className="mt-4 pt-4 border-t border-white/20 space-y-3 animate-in fade-in">
@@ -378,7 +441,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         )}
       </div>
 
-      {/* PAYMENT ACCOUNTS (UPI & QR) */}
+      {/* 2. PAYMENT ACCOUNTS (UPI & QR) */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -819,76 +882,323 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         )}
       </div>
 
-      {/* CURRENCY & REGIONAL SETTINGS */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Globe size={16} />
+      {/* 3. APP PREFERENCES & CONTROLS (Grouped Modern Menu List) */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs divide-y divide-slate-100 overflow-hidden">
+        {/* Row 1: Currency Preference Button */}
+        <button
+          type="button"
+          onClick={() => setShowCurrencyModal(true)}
+          className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50/80 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+              <Globe size={18} />
             </div>
             <div>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Currency & Regional Settings
-              </h2>
-              <p className="text-[11px] text-slate-500 font-medium">
-                Default currency for your bills and trips
-              </p>
+              <h3 className="text-xs font-bold text-slate-800">Default Currency & Trip Region</h3>
+              <p className="text-[11px] text-slate-500">Auto-sets currency for trips & bills</p>
             </div>
           </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-xs font-extrabold text-blue-700 bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-lg flex items-center gap-1">
+              <span>{currencyConfig.flag}</span>
+              <span>{currencyConfig.code} ({currencyConfig.symbol})</span>
+            </span>
+            <ChevronRight size={16} className="text-slate-400" />
+          </div>
+        </button>
 
-          <button
-            type="button"
-            onClick={handleGPSDetect}
-            disabled={isGpsDetecting}
-            className="text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 active:scale-95"
-            title="Auto-detect currency from device GPS"
-          >
-            <Navigation size={11} className={isGpsDetecting ? 'animate-spin' : ''} />
-            {isGpsDetecting ? 'Locating...' : 'Auto Detect GPS'}
-          </button>
-        </div>
-
-        {/* Active Currency Display & Picker */}
-        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="text-2xl">{getCurrencyConfig(activePrefCurrency).flag}</span>
-              <div>
-                <span className="text-xs font-bold text-slate-900">
-                  {activePrefCurrency} ({getCurrencyConfig(activePrefCurrency).symbol}) • {getCurrencyConfig(activePrefCurrency).name}
-                </span>
-                <p className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
-                  <MapPin size={10} className="text-emerald-600 shrink-0" />
-                  {currentUser.preferredCurrency
-                    ? `Saved Preference (Overrides location)`
-                    : detectedLocation.source === 'gps'
-                    ? `GPS Pinpointed: ${detectedLocation.countryName}`
-                    : `Auto-detected from timezone (${detectedLocation.locationDetail})`}
-                </p>
-              </div>
+        {/* Row 2: Push Notifications Alerts */}
+        <button
+          type="button"
+          onClick={handleToggleNotifications}
+          className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50/80 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+              <Bell size={18} />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-slate-800">Push Notification Alerts</h3>
+              <p className="text-[11px] text-slate-500">Real-time alerts for bills and payments</p>
             </div>
           </div>
-
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-              Choose Currency:
-            </label>
-            <select
-              value={activePrefCurrency}
-              onChange={(e) => handleCurrencyChange(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30"
-            >
-              {SUPPORTED_CURRENCIES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.flag} {c.code} ({c.symbol}) - {c.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
+              notifPermission === 'granted'
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : 'bg-slate-100 text-slate-600'
+            }`}>
+              {notifPermission === 'granted' ? 'Enabled 🔔' : 'Tap to Enable'}
+            </span>
+            <ChevronRight size={16} className="text-slate-400" />
           </div>
-        </div>
+        </button>
+
+        {/* Row 3: Data & Security Controls (Opens Security Modal) */}
+        <button
+          type="button"
+          onClick={() => setShowSecurityModal(true)}
+          className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50/80 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+              <Shield size={18} />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-slate-800">Data & Account Security</h3>
+              <p className="text-[11px] text-slate-500">Cache management & account deletion</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[11px] font-bold text-slate-500">Manage</span>
+            <ChevronRight size={16} className="text-slate-400" />
+          </div>
+        </button>
       </div>
 
-      {/* Zoomed Barcode Modal */}
+      {/* 4. LOG OUT BUTTON (Clean & Prominent Outside, as requested) */}
+      {onSignOut && (
+        <div className="pt-1">
+          <button
+            onClick={onSignOut}
+            className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs active:scale-[0.99]"
+          >
+            <LogOut size={16} className="text-slate-500" />
+            Log Out ({currentUser.name})
+          </button>
+        </div>
+      )}
+
+      {/* 5. Minimal Footer */}
+      <div className="pt-2 text-center space-y-1">
+        <p className="text-[10px] text-slate-400 font-medium">
+          SplitShare v1.0.0 • Protected by 256-bit Token Security
+        </p>
+      </div>
+
+      {/* ========================================================= */}
+      {/* MODAL 1: Currency & Trip Location Settings Modal */}
+      {/* ========================================================= */}
+      {showCurrencyModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Currency & Regional Settings"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in"
+        >
+          <div className="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl p-5 space-y-4 shadow-2xl animate-in slide-in-from-bottom-6 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Globe size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Currency & Region</h3>
+                  <p className="text-[10px] text-slate-500">Choose your base currency</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCurrencyModal(false)}
+                className="min-w-[36px] min-h-[36px] rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Location Detection Pill */}
+            <div className="p-3 bg-blue-50/70 rounded-2xl border border-blue-200/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-blue-950">
+                  <MapPin size={13} className="text-blue-600" />
+                  <span>Device Location Detected:</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGPSDetect}
+                  disabled={isGpsDetecting}
+                  className="text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-white border border-blue-200 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs"
+                >
+                  <Navigation size={10} className={isGpsDetecting ? 'animate-spin' : ''} />
+                  {isGpsDetecting ? 'Pinpointing...' : 'GPS Auto-Detect'}
+                </button>
+              </div>
+              <p className="text-[11px] text-blue-800 font-medium">
+                {detectedLocation.source === 'gps'
+                  ? `Pinpointed via GPS: ${detectedLocation.countryName}`
+                  : `Detected via device timezone: ${detectedLocation.locationDetail} (${detectedLocation.countryName})`}
+              </p>
+            </div>
+
+            {/* Currency Option List */}
+            <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                Select Currency:
+              </label>
+              {SUPPORTED_CURRENCIES.map((c) => {
+                const isSelected = selectedCurrency === c.code;
+                return (
+                  <button
+                    key={c.code}
+                    type="button"
+                    onClick={() => handleApplyCurrencyChange(c.code)}
+                    className={`w-full p-2.5 rounded-xl border flex items-center justify-between text-left transition-all ${
+                      isSelected
+                        ? 'border-blue-600 bg-blue-50/80 shadow-xs'
+                        : 'border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xl">{c.flag}</span>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-extrabold text-slate-900">{c.code}</span>
+                          <span className="text-xs font-bold text-slate-500">({c.symbol})</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400">{c.name}</p>
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">
+                        <Check size={12} />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCurrencyModal(false)}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 2: Data & Account Security (Cleanly Isolated) */}
+      {/* ========================================================= */}
+      {showSecurityModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Data & Security Controls"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in"
+        >
+          <div className="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl p-5 space-y-4 shadow-2xl animate-in slide-in-from-bottom-6 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <Shield size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Data & Security</h3>
+                  <p className="text-[10px] text-slate-500">Device storage & account safety</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSecurityModal(false)}
+                className="min-w-[36px] min-h-[36px] rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Clear Local Cache */}
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800">Clear Local Offline Cache</h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Deletes temporary cached items on this device without deleting your server data.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('Clear local offline cache? Your cloud data will sync on next refresh.')) {
+                    onClearAllData();
+                    setShowSecurityModal(false);
+                  }
+                }}
+                className="w-full py-2 px-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+              >
+                <Trash2 size={13} />
+                Clear Local Cache
+              </button>
+            </div>
+
+            {/* Danger Zone: Permanent Account Deletion */}
+            {onDeleteAccount && (
+              <div className="p-3 bg-rose-50/70 rounded-2xl border border-rose-200/80 space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-bold text-rose-950">Permanent Account Deletion</h4>
+                    <p className="text-[10px] text-rose-800 mt-0.5">
+                      Irreversibly deletes your account credentials and personal profile from the servers.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const confirmed = window.confirm(
+                      '⚠️ PERMANENT ACCOUNT DELETION\n\nAre you sure you want to permanently delete your SplitShare account? All your personal account details will be purged from our servers. This cannot be undone.'
+                    );
+                    if (confirmed) {
+                      const check = window.prompt('Type DELETE to confirm permanent account deletion:');
+                      if (check === 'DELETE') {
+                        onDeleteAccount();
+                      } else {
+                        alert('Account deletion aborted: text did not match "DELETE".');
+                      }
+                    }
+                  }}
+                  className="w-full py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs active:scale-95"
+                >
+                  <Trash2 size={13} />
+                  Delete Account & Purge Data
+                </button>
+              </div>
+            )}
+
+            {/* Legal & Policy Compliance Links */}
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-3 text-xs text-slate-500 font-semibold">
+              <a
+                href="/privacy-policy.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-emerald-700 underline underline-offset-2 flex items-center gap-1 text-[11px]"
+              >
+                Privacy Policy <ExternalLink size={10} />
+              </a>
+              <span>•</span>
+              <a
+                href="/delete-account.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-rose-700 underline underline-offset-2 flex items-center gap-1 text-[11px]"
+              >
+                Web Deletion <ExternalLink size={10} />
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 3: Zoomed Barcode QR Preview */}
+      {/* ========================================================= */}
       {zoomQr && (
         <div
           role="dialog"
@@ -934,85 +1244,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         </div>
       )}
-
-      {/* Log Out button */}
-      {onSignOut && (
-        <div className="pt-2">
-          <button
-            onClick={onSignOut}
-            className="w-full py-2.5 px-4 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-xs"
-          >
-            <LogOut size={14} className="text-slate-600" />
-            Log Out ({currentUser.name})
-          </button>
-        </div>
-      )}
-
-      {/* Clear All Data button */}
-      <div className="pt-2">
-        <button
-          onClick={() => {
-            if (confirm('Are you sure you want to clear all cached groups and expenses on this device?')) {
-              onClearAllData();
-            }
-          }}
-          className="w-full py-2.5 px-4 rounded-xl border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
-        >
-          <Trash2 size={14} />
-          Clear Local Cache
-        </button>
-      </div>
-
-      {/* Account Deletion (Google Play Store Mandatory Policy Compliance) */}
-      {onDeleteAccount && (
-        <div className="pt-2 pb-4">
-          <button
-            onClick={() => {
-              const confirmed = window.confirm(
-                '⚠️ PERMANENT ACCOUNT DELETION\n\nAre you sure you want to permanently delete your SplitShare account? All your personal account details will be purged from our servers. This cannot be undone.'
-              );
-              if (confirmed) {
-                const check = window.prompt('Type DELETE to confirm permanent account deletion:');
-                if (check === 'DELETE') {
-                  onDeleteAccount();
-                } else {
-                  alert('Account deletion aborted: text did not match "DELETE".');
-                }
-              }
-            }}
-            className="w-full py-2.5 px-4 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
-          >
-            <Trash2 size={14} />
-            Delete Account & Purge Data
-          </button>
-        </div>
-      )}
-
-      {/* Legal & Compliance Links for Google Play Store Policy */}
-      <div className="pt-2 pb-6 text-center space-y-1.5 border-t border-slate-200 mt-2">
-        <div className="flex items-center justify-center gap-3 text-xs text-slate-500 font-semibold">
-          <a
-            href="/privacy-policy.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-emerald-700 underline underline-offset-2"
-          >
-            Privacy Policy
-          </a>
-          <span>•</span>
-          <a
-            href="/delete-account.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-rose-700 underline underline-offset-2"
-          >
-            Web Account Deletion
-          </a>
-        </div>
-        <p className="text-[10px] text-slate-500">
-          SplitShare v1.0.0 • Secure & Private
-        </p>
-      </div>
     </div>
   );
 };
