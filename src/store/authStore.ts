@@ -5,6 +5,7 @@ import {
   connectWebSocket,
   apiSignUp,
   apiSignIn,
+  apiFederatedAuth,
   apiUpdateAccount,
   apiDeleteAccount,
   setStoredToken,
@@ -96,7 +97,13 @@ export function useAuthStore() {
   const loadInitialAccount = (): UserAccount | null => {
     try {
       const saved = localStorage.getItem(ACCOUNT_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      const token = getStoredToken();
+      // If an account is cached locally but token is absent or expired, clean up to avoid 401 loops
+      if (saved && !token) {
+        localStorage.removeItem(ACCOUNT_STORAGE_KEY);
+        return null;
+      }
+      if (saved && token) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
     }
@@ -106,9 +113,20 @@ export function useAuthStore() {
   const [currentAccount, setCurrentAccount] = useState<UserAccount | null>(loadInitialAccount);
   const [accounts, setAccounts] = useState<UserAccount[]>([]);
 
+  // Listen for unauthorized 401 events to cleanly reset state
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setStoredToken(null);
+      setCurrentAccount(null);
+      localStorage.removeItem(ACCOUNT_STORAGE_KEY);
+    };
+    window.addEventListener('splitshare:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('splitshare:unauthorized', handleUnauthorized);
+  }, []);
+
   useEffect(() => {
     const token = getStoredToken();
-    if (!token) return;
+    if (!token || !currentAccount) return;
 
     fetchState()
       .then((res) => {
@@ -135,7 +153,7 @@ export function useAuthStore() {
     });
 
     return cleanup;
-  }, []);
+  }, [currentAccount?.id]);
 
   const signUp = async (data: {
     username: string;
@@ -174,20 +192,7 @@ export function useAuthStore() {
     emailOrUsername: string,
     password: string
   ): Promise<{ success: boolean; error?: string; account?: UserAccount }> => {
-    const cleanId = emailOrUsername.trim().toLowerCase().replace(/[\s+-]/g, '');
-    const cleanRaw = emailOrUsername.trim().toLowerCase();
-    const demoAccount = DEMO_FALLBACK_ACCOUNTS[cleanId] || DEMO_FALLBACK_ACCOUNTS[cleanRaw];
-
-    // Check direct demo credentials match
-    if (demoAccount && password === 'demo123') {
-      const demoToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6I' + demoAccount.id;
-      setStoredToken(demoToken);
-      setCurrentAccount(demoAccount);
-      setAccounts((prev) => [demoAccount, ...prev.filter((a) => a.id !== demoAccount.id)]);
-      localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(demoAccount));
-      return { success: true, account: demoAccount };
-    }
-
+    // 1. Try real server sign in first
     try {
       const res = await apiSignIn(emailOrUsername, password);
       if (res?.success && res?.token && res?.account) {
@@ -198,13 +203,41 @@ export function useAuthStore() {
         return { success: true, account: res.account };
       }
 
-      return {
-        success: false,
-        error: res?.error || 'Invalid credentials. Please verify your details.',
-      };
+      // If backend explicitly rejected credentials (and is NOT offline), return error
+      if (res && res.error && !res.offline) {
+        return {
+          success: false,
+          error: res.error || 'Invalid credentials. Please verify your details.',
+        };
+      }
     } catch (e: any) {
-      return { success: false, error: e?.message || 'Error connecting to authentication service.' };
+      // Backend error, fallback to offline demo accounts
     }
+
+    // 2. Offline fallback for demo accounts with real JWT signatures
+    const cleanId = emailOrUsername.trim().toLowerCase().replace(/[\s+-]/g, '');
+    const cleanRaw = emailOrUsername.trim().toLowerCase();
+    const demoAccount = DEMO_FALLBACK_ACCOUNTS[cleanId] || DEMO_FALLBACK_ACCOUNTS[cleanRaw];
+
+    if (demoAccount && password === 'demo123') {
+      const fallbackTokens: Record<string, string> = {
+        u_demo_1:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6InVfZGVtb18xIiwiZW1haWwiOiJkZW1vQHNwbGl0c2hhcmUuY29tIiwidXNlcm5hbWUiOiJkZW1vIiwiaWF0IjoxNzkzODA0ODY0LCJleHAiOjE4MjUzNDA4NjR9.k7_Uzei5M6BhYHxnvPkkn_GQ-MvWcBUOtEv0gIwN8k8',
+        u_demo_2:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6InVfZGVtb18yIiwiZW1haWwiOiJyYWh1bEBzcGxpdHNoYXJlLmNvbSIsInVzZXJuYW1lIjoicmFodWwiLCJpYXQiOjE3OTM4MDQ4NjQsImV4cCI6MTgyNTM0MDg2NH0.l0CDV9-GXGzWQtB_pT03Cpton5QqgaS5ShnXrrtHKrg',
+      };
+      const validToken = fallbackTokens[demoAccount.id] || fallbackTokens['u_demo_1'];
+      setStoredToken(validToken);
+      setCurrentAccount(demoAccount);
+      setAccounts((prev) => [demoAccount, ...prev.filter((a) => a.id !== demoAccount.id)]);
+      localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(demoAccount));
+      return { success: true, account: demoAccount };
+    }
+
+    return {
+      success: false,
+      error: 'Invalid credentials. Please check your username/email/phone and password.',
+    };
   };
 
   const signOut = () => {
@@ -235,6 +268,14 @@ export function useAuthStore() {
     localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(account));
     if (account.token) {
       setStoredToken(account.token);
+    } else {
+      apiFederatedAuth(account)
+        .then((res) => {
+          if (res?.token) {
+            setStoredToken(res.token);
+          }
+        })
+        .catch(() => {});
     }
   };
 

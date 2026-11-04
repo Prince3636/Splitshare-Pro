@@ -14,6 +14,7 @@ import {
 import {
   fetchState,
   connectWebSocket,
+  getStoredToken,
   apiCreateGroup,
   apiDeleteGroup,
   apiLeaveGroup,
@@ -133,6 +134,11 @@ export function useAppStore(currentAccount: UserAccount | null) {
       } catch {
         // ignore
       }
+    }
+
+    const token = getStoredToken();
+    if (!currentAccount || !token) {
+      return;
     }
 
     fetchState()

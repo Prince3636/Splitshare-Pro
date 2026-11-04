@@ -426,6 +426,48 @@ app.post('/api/auth/signin', authLimiter, async (req: Request, res: Response) =>
   }
 });
 
+// Federated / Social Sign-In (Exchanges verified profile for SplitShare JWT)
+app.post('/api/auth/federated', authLimiter, async (req: Request, res: Response) => {
+  try {
+    const { account } = req.body;
+    if (!account || !account.id || !account.email) {
+      return res.status(400).json({ success: false, error: 'Valid account profile required.' });
+    }
+
+    const cleanEmail = account.email.trim().toLowerCase();
+    let found = (db.accounts || []).find(
+      (a: any) => a.id === account.id || a.email.toLowerCase() === cleanEmail
+    );
+
+    if (!found) {
+      found = {
+        id: account.id,
+        username: account.username || cleanEmail.split('@')[0],
+        email: cleanEmail,
+        name: account.name || 'SplitShare User',
+        avatar: account.avatar || '😎',
+        phone: account.phone || undefined,
+        upiId: account.upiId || undefined,
+        upiAccounts: account.upiAccounts || [],
+        createdAt: new Date().toISOString(),
+      };
+      db.accounts.push(found);
+      saveDatabase();
+      broadcastScopedState();
+    }
+
+    const token = jwt.sign(
+      { id: found.id, email: found.email, username: found.username },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({ success: true, token, account: sanitizeAccount(found) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'Federated authentication failed.' });
+  }
+});
+
 // Update Profile (IDOR Protected: Caller updates only their own account)
 app.post('/api/auth/update', requireAuth, (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;

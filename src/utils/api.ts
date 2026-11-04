@@ -65,6 +65,11 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
     const res = await fetch(url, { ...options, headers });
     if (res.status === 401) {
       setStoredToken(null);
+      try {
+        localStorage.removeItem('splitshare_auth_account_v5');
+        window.dispatchEvent(new CustomEvent('splitshare:unauthorized'));
+      } catch {}
+      return { success: false, status: 401, error: 'Unauthorized: Session expired or invalid.' };
     }
     const contentType = res.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
@@ -77,7 +82,18 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
 }
 
 export async function fetchState() {
+  const token = getStoredToken();
+  if (!token) {
+    return { success: false, unauthenticated: true, data: null };
+  }
   return apiFetch('/api/state');
+}
+
+export async function apiFederatedAuth(account: any) {
+  return apiFetch('/api/auth/federated', {
+    method: 'POST',
+    body: JSON.stringify({ account }),
+  });
 }
 
 export async function apiSignUp(data: any) {
