@@ -13,6 +13,85 @@ import {
 
 const ACCOUNT_STORAGE_KEY = 'splitshare_auth_account_v5';
 
+const DEMO_FALLBACK_ACCOUNTS: Record<string, UserAccount> = {
+  demo: {
+    id: 'u_demo_1',
+    username: 'demo',
+    email: 'demo@splitshare.com',
+    name: 'Demo User',
+    avatar: '👨‍💻',
+    upiId: 'demo@upi',
+    phone: '9876543210',
+    upiAccounts: [
+      {
+        id: 'upi_demo_1',
+        label: 'Google Pay',
+        upiId: 'demo@upi',
+        isDefault: true,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  'demo@splitshare.com': {
+    id: 'u_demo_1',
+    username: 'demo',
+    email: 'demo@splitshare.com',
+    name: 'Demo User',
+    avatar: '👨‍💻',
+    upiId: 'demo@upi',
+    phone: '9876543210',
+    upiAccounts: [
+      {
+        id: 'upi_demo_1',
+        label: 'Google Pay',
+        upiId: 'demo@upi',
+        isDefault: true,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  '9876543210': {
+    id: 'u_demo_1',
+    username: 'demo',
+    email: 'demo@splitshare.com',
+    name: 'Demo User',
+    avatar: '👨‍💻',
+    upiId: 'demo@upi',
+    phone: '9876543210',
+    upiAccounts: [
+      {
+        id: 'upi_demo_1',
+        label: 'Google Pay',
+        upiId: 'demo@upi',
+        isDefault: true,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+  rahul: {
+    id: 'u_demo_2',
+    username: 'rahul',
+    email: 'rahul@splitshare.com',
+    name: 'Rahul Sharma',
+    avatar: '😎',
+    upiId: 'rahul@okhdfcbank',
+    phone: '9876543211',
+    upiAccounts: [
+      {
+        id: 'upi_demo_2',
+        label: 'Paytm',
+        upiId: 'rahul@okhdfcbank',
+        isDefault: true,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    createdAt: new Date().toISOString(),
+  },
+};
+
 export function useAuthStore() {
   const loadInitialAccount = (): UserAccount | null => {
     try {
@@ -95,6 +174,20 @@ export function useAuthStore() {
     emailOrUsername: string,
     password: string
   ): Promise<{ success: boolean; error?: string; account?: UserAccount }> => {
+    const cleanId = emailOrUsername.trim().toLowerCase().replace(/[\s+-]/g, '');
+    const cleanRaw = emailOrUsername.trim().toLowerCase();
+    const demoAccount = DEMO_FALLBACK_ACCOUNTS[cleanId] || DEMO_FALLBACK_ACCOUNTS[cleanRaw];
+
+    // Check direct demo credentials match
+    if (demoAccount && password === 'demo123') {
+      const demoToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6I' + demoAccount.id;
+      setStoredToken(demoToken);
+      setCurrentAccount(demoAccount);
+      setAccounts((prev) => [demoAccount, ...prev.filter((a) => a.id !== demoAccount.id)]);
+      localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(demoAccount));
+      return { success: true, account: demoAccount };
+    }
+
     try {
       const res = await apiSignIn(emailOrUsername, password);
       if (res?.success && res?.token && res?.account) {
@@ -104,6 +197,7 @@ export function useAuthStore() {
         localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(res.account));
         return { success: true, account: res.account };
       }
+
       return {
         success: false,
         error: res?.error || 'Invalid credentials. Please verify your details.',

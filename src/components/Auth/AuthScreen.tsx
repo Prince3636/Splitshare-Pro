@@ -120,8 +120,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
     setLoading(true);
 
-    // If identifier is an email and Firebase is enabled, try Firebase Auth first
-    if (loginIdentifier.includes('@') && isFirebaseConfigured()) {
+    // If identifier is an email and Firebase is enabled, try Firebase Auth first (skip demo email)
+    if (
+      loginIdentifier.includes('@') &&
+      !loginIdentifier.toLowerCase().includes('demo@') &&
+      !loginIdentifier.toLowerCase().includes('rahul@') &&
+      isFirebaseConfigured()
+    ) {
       try {
         const fbRes = await signInWithEmail(loginIdentifier.trim(), loginPassword);
         if (fbRes.success && fbRes.account) {

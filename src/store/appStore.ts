@@ -39,6 +39,71 @@ export function useAppStore(currentAccount: UserAccount | null) {
     } catch (e) {
       console.error('Failed to parse saved state', e);
     }
+
+    if (accId === 'u_demo_1' || accId === 'u_demo_2') {
+      return {
+        groups: [
+          {
+            id: 'g_goa_trip',
+            name: 'Goa Trip 🏖️',
+            emoji: '🏖️',
+            description: 'Weekend trip with friends',
+            createdBy: 'u_demo_1',
+            targetBudget: 15000,
+            members: [
+              {
+                id: 'u_demo_1',
+                name: 'Demo User',
+                avatar: '👨‍💻',
+                color: 'from-emerald-500 to-teal-600',
+                email: 'demo@splitshare.com',
+                upiId: 'demo@upi',
+                phone: '9876543210',
+              },
+              {
+                id: 'u_demo_2',
+                name: 'Rahul Sharma',
+                avatar: '😎',
+                color: 'from-blue-500 to-indigo-600',
+                email: 'rahul@splitshare.com',
+                upiId: 'rahul@okhdfcbank',
+                phone: '9876543211',
+              },
+            ],
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        expenses: [
+          {
+            id: 'exp_shack_dinner',
+            groupId: 'g_goa_trip',
+            title: 'Beach Shack Dinner',
+            amount: 1500,
+            paidById: 'u_demo_1',
+            date: new Date().toISOString(),
+            category: 'food',
+            splitType: 'EQUAL',
+            splits: [
+              { memberId: 'u_demo_1', amount: 750 },
+              { memberId: 'u_demo_2', amount: 750 },
+            ],
+            status: 'CONFIRMED',
+            requiresApproval: false,
+            approvals: {
+              u_demo_1: { memberId: 'u_demo_1', status: 'ACCEPTED' },
+              u_demo_2: { memberId: 'u_demo_2', status: 'ACCEPTED' },
+            },
+            notes: 'Seafood, juices & snacks',
+          },
+        ],
+        settlements: [],
+        kittyContributions: [],
+        kittyExpenses: [],
+        invites: [],
+        notifications: [],
+      };
+    }
+
     return {
       groups: [],
       expenses: [],
