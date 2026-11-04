@@ -49,111 +49,6 @@ function loadDatabase() {
 
 let db = loadDatabase();
 
-function ensureDemoAccount() {
-  if (!db.accounts || db.accounts.length === 0) {
-    const demoPassHash = bcrypt.hashSync('demo123', 10);
-    const demoUser = {
-      id: 'u_demo_1',
-      username: 'demo',
-      email: 'demo@splitshare.com',
-      password: demoPassHash,
-      name: 'Demo User',
-      avatar: '👨‍💻',
-      upiId: 'demo@upi',
-      phone: '9876543210',
-      upiAccounts: [
-        {
-          id: 'upi_demo_1',
-          label: 'Google Pay',
-          upiId: 'demo@upi',
-          isDefault: true,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-      createdAt: new Date().toISOString(),
-    };
-
-    const friendUser = {
-      id: 'u_demo_2',
-      username: 'rahul',
-      email: 'rahul@splitshare.com',
-      password: demoPassHash,
-      name: 'Rahul Sharma',
-      avatar: '😎',
-      upiId: 'rahul@okhdfcbank',
-      phone: '9876543211',
-      upiAccounts: [
-        {
-          id: 'upi_demo_2',
-          label: 'Paytm',
-          upiId: 'rahul@okhdfcbank',
-          isDefault: true,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-      createdAt: new Date().toISOString(),
-    };
-
-    const sampleGroup = {
-      id: 'g_goa_trip',
-      name: 'Goa Trip 🏖️',
-      emoji: '🏖️',
-      description: 'Weekend trip with friends',
-      createdBy: 'u_demo_1',
-      targetBudget: 15000,
-      members: [
-        {
-          id: 'u_demo_1',
-          name: 'Demo User',
-          avatar: '👨‍💻',
-          color: 'from-emerald-500 to-teal-600',
-          email: 'demo@splitshare.com',
-          upiId: 'demo@upi',
-          phone: '9876543210',
-        },
-        {
-          id: 'u_demo_2',
-          name: 'Rahul Sharma',
-          avatar: '😎',
-          color: 'from-blue-500 to-indigo-600',
-          email: 'rahul@splitshare.com',
-          upiId: 'rahul@okhdfcbank',
-          phone: '9876543211',
-        },
-      ],
-      createdAt: new Date().toISOString(),
-    };
-
-    const sampleExpense = {
-      id: 'exp_shack_dinner',
-      groupId: 'g_goa_trip',
-      title: 'Beach Shack Dinner',
-      amount: 1500,
-      paidById: 'u_demo_1',
-      date: new Date().toISOString(),
-      category: 'food',
-      splitType: 'EQUAL',
-      splits: [
-        { memberId: 'u_demo_1', amount: 750 },
-        { memberId: 'u_demo_2', amount: 750 },
-      ],
-      status: 'CONFIRMED',
-      requiresApproval: false,
-      approvals: {
-        u_demo_1: { memberId: 'u_demo_1', status: 'ACCEPTED' },
-        u_demo_2: { memberId: 'u_demo_2', status: 'ACCEPTED' },
-      },
-      notes: 'Seafood, juices & snacks',
-    };
-
-    db.accounts = [demoUser, friendUser];
-    db.groups = [sampleGroup];
-    db.expenses = [sampleExpense];
-    saveDatabase();
-  }
-}
-ensureDemoAccount();
-
 function saveDatabase() {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
@@ -324,23 +219,30 @@ app.get('/api/state', requireAuth, (req: AuthenticatedRequest, res: Response) =>
 // Sign Up Endpoint (Generates JWT)
 app.post('/api/auth/signup', authLimiter, async (req: Request, res: Response) => {
   try {
-    const { username, email, password, name, upiId, phone } = req.body;
-    const cleanUsername = username?.trim().toLowerCase();
+    const { email, password, name, upiId, avatar } = req.body;
     const cleanEmail = email?.trim().toLowerCase();
+    const cleanName = name?.trim();
 
-    if (!cleanUsername || !cleanEmail || !password || !name?.trim()) {
-      return res.status(400).json({ success: false, error: 'Name, username, email, and password are required.' });
+    if (!cleanEmail || !password || !cleanName) {
+      return res.status(400).json({ success: false, error: 'Name, email, and password are required.' });
     }
 
     if (password.length < 6) {
       return res.status(400).json({ success: false, error: 'Password must be at least 6 characters.' });
     }
 
-    if ((db.accounts || []).some((a: any) => a.username.toLowerCase() === cleanUsername)) {
-      return res.status(400).json({ success: false, error: 'Username already taken.' });
+    if ((db.accounts || []).some((a: any) => a.email && a.email.toLowerCase() === cleanEmail)) {
+      return res.status(400).json({ success: false, error: 'This email is already registered. Please sign in.' });
     }
-    if ((db.accounts || []).some((a: any) => a.email.toLowerCase() === cleanEmail)) {
-      return res.status(400).json({ success: false, error: 'Email already registered.' });
+
+    let baseUsername = req.body.username?.trim().toLowerCase() || cleanEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '');
+    if (!baseUsername) baseUsername = 'user';
+    let cleanUsername = baseUsername;
+    let count = 1;
+    while ((db.accounts || []).some((a: any) => a.username && a.username.toLowerCase() === cleanUsername)) {
+      cleanUsername = `${baseUsername}_${Math.floor(Math.random() * 8999 + 1000)}`;
+      count++;
+      if (count > 10) break;
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -351,10 +253,10 @@ app.post('/api/auth/signup', authLimiter, async (req: Request, res: Response) =>
       username: cleanUsername,
       email: cleanEmail,
       password: hashedPassword,
-      name: name.trim(),
-      avatar: '😎',
+      name: cleanName,
+      avatar: avatar || '😎',
       upiId: upiId?.trim() || undefined,
-      phone: phone?.trim() || undefined,
+      phone: req.body.phone?.trim() || undefined,
       upiAccounts: upiId?.trim()
         ? [
             {
@@ -386,31 +288,28 @@ app.post('/api/auth/signup', authLimiter, async (req: Request, res: Response) =>
   }
 });
 
-// Sign In Endpoint (Generates JWT)
+// Sign In Endpoint (Email & Password Login)
 app.post('/api/auth/signin', authLimiter, async (req: Request, res: Response) => {
   try {
-    const { identifier, password } = req.body;
-    if (!identifier || !password) {
-      return res.status(400).json({ success: false, error: 'Username/email/phone and password are required.' });
+    const { email, identifier, password } = req.body;
+    const loginEmail = (email || identifier)?.trim().toLowerCase();
+    if (!loginEmail || !password) {
+      return res.status(400).json({ success: false, error: 'Email and password are required.' });
     }
-
-    const query = identifier.trim().toLowerCase();
-    const cleanPhone = query.replace(/[\s+-]/g, '');
 
     const found = (db.accounts || []).find(
       (a: any) =>
-        a.username.toLowerCase() === query ||
-        a.email.toLowerCase() === query ||
-        (a.phone && a.phone.replace(/[\s+-]/g, '') === cleanPhone)
+        (a.email && a.email.toLowerCase() === loginEmail) ||
+        (a.username && a.username.toLowerCase() === loginEmail)
     );
 
     if (!found) {
-      return res.status(401).json({ success: false, error: 'Invalid credentials.' });
+      return res.status(401).json({ success: false, error: 'Invalid email or password.' });
     }
 
     const isMatch = await bcrypt.compare(password, found.password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, error: 'Invalid credentials.' });
+      return res.status(401).json({ success: false, error: 'Invalid email or password.' });
     }
 
     const token = jwt.sign(

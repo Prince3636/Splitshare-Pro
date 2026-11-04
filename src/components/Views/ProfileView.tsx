@@ -357,7 +357,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
         {/* Total Net Balance Across All Groups */}
         <div className="mt-5 pt-4 border-t border-white/20">
-          <p className="text-xs uppercase tracking-wider text-emerald-100 font-semibold">
+          <p className="text-[11px] uppercase tracking-wider text-emerald-100/90 font-bold">
             Total Balance (All Groups)
           </p>
           <div className="flex items-baseline gap-2 mt-0.5">
@@ -366,15 +366,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 ? `+${formatCurrency(totalNetBalance)}`
                 : totalNetBalance < -0.01
                 ? `-${formatCurrency(Math.abs(totalNetBalance))}`
-                : 'All accounts balanced'}
+                : 'All Settled Up'}
             </h2>
-            <span className="text-xs text-emerald-100 font-medium">
-              {totalNetBalance > 0.01
-                ? 'you will receive'
-                : totalNetBalance < -0.01
-                ? 'you need to pay'
-                : 'settled'}
-            </span>
+            {Math.abs(totalNetBalance) > 0.01 ? (
+              <span className="text-xs text-emerald-100 font-medium">
+                {totalNetBalance > 0.01 ? 'you will receive' : 'you need to pay'}
+              </span>
+            ) : (
+              <span className="text-xs text-emerald-100/80 font-medium">
+                • No pending dues
+              </span>
+            )}
           </div>
         </div>
 
@@ -751,19 +753,93 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <div className="space-y-3">
             {upiList.map((acc) => {
               const displayQr = qrMap[acc.id] || acc.customQrImage || null;
+              const isGoogle = acc.label.toLowerCase().includes('google') || acc.label.toLowerCase().includes('gpay');
+              const isPhonePe = acc.label.toLowerCase().includes('phone');
+              const isPaytm = acc.label.toLowerCase().includes('paytm');
 
               return (
                 <div
                   key={acc.id}
-                  className={`p-3.5 rounded-2xl border transition-all ${
+                  className={`rounded-2xl border transition-all overflow-hidden ${
                     acc.isDefault
-                      ? 'border-emerald-500 bg-emerald-50/40 shadow-xs'
-                      : 'border-slate-200 bg-slate-50/50'
+                      ? 'border-emerald-300 bg-linear-to-br from-emerald-50/40 via-white to-slate-50/50 shadow-xs ring-1 ring-emerald-500/15'
+                      : 'border-slate-200 bg-white hover:border-slate-300 shadow-2xs'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      {/* Barcode / QR Thumbnail with Zoom on Click */}
+                  <div className="p-3.5 space-y-3">
+                    {/* Header: App Brand + Primary Badge + Edit Button */}
+                    <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs shrink-0 ${
+                            isGoogle
+                              ? 'bg-blue-50 text-blue-600 border border-blue-200/60'
+                              : isPhonePe
+                              ? 'bg-purple-50 text-purple-700 border border-purple-200/60'
+                              : isPaytm
+                              ? 'bg-sky-50 text-sky-600 border border-sky-200/60'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                          }`}
+                        >
+                          {isGoogle ? 'G' : isPhonePe ? 'Pe' : isPaytm ? '₹' : 'UPI'}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-xs font-bold text-slate-800 leading-tight">
+                              {acc.label}
+                            </h4>
+                            {acc.isDefault && (
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 leading-none">
+                                <Star size={9} fill="currentColor" />
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleStartEditUPI(acc)}
+                          className="flex items-center gap-1 text-[11px] font-bold text-slate-700 hover:text-emerald-700 bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-200 px-2.5 py-1 rounded-lg transition-all active:scale-95 shadow-2xs"
+                          title="Edit Payment Account"
+                        >
+                          <Edit3 size={11} className="text-emerald-600" />
+                          Edit
+                        </button>
+                        {onDeleteUPIAccount && upiList.length > 1 && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`Remove ${acc.label}?`)) {
+                                onDeleteUPIAccount(acc.id);
+                              }
+                            }}
+                            className="text-slate-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-colors"
+                            title="Delete UPI"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Middle Section: UPI ID & QR Code Thumbnail */}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                          UPI Address (VPA)
+                        </span>
+                        <p className="font-mono text-xs font-bold text-slate-900 select-all truncate">
+                          {acc.upiId}
+                        </p>
+                        {acc.customQrImage && (
+                          <span className="inline-flex items-center gap-1 text-[10px] bg-indigo-50 text-indigo-700 font-semibold px-1.5 py-0.5 rounded-md border border-indigo-100 mt-1">
+                            Custom Scanner Uploaded
+                          </span>
+                        )}
+                      </div>
+
+                      {/* QR Thumbnail */}
                       <div
                         onClick={() => {
                           if (displayQr) {
@@ -774,8 +850,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                             });
                           }
                         }}
-                        className="relative group cursor-pointer w-16 h-16 rounded-xl bg-white p-1 border border-slate-200 shadow-xs shrink-0 flex items-center justify-center overflow-hidden"
-                        title={displayQr ? "Click to expand QR code" : "Generating QR code..."}
+                        className="relative group cursor-pointer w-12 h-12 rounded-xl bg-white p-1 border border-slate-200 shadow-2xs shrink-0 flex items-center justify-center overflow-hidden hover:border-emerald-500 transition-all active:scale-95"
+                        title={displayQr ? 'Tap to view full QR' : 'Generating QR code...'}
                       >
                         {displayQr ? (
                           <>
@@ -785,92 +861,56 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                               className="w-full h-full object-contain"
                             />
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
-                              <Maximize2 size={14} />
+                              <Maximize2 size={11} />
                             </div>
                           </>
                         ) : (
-                          <QrCode size={22} className="text-slate-400 animate-pulse" />
+                          <QrCode size={18} className="text-slate-400 animate-pulse" />
                         )}
-                      </div>
-
-                      <div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h4 className="text-xs font-bold text-slate-900">{acc.label}</h4>
-                          {acc.isDefault && (
-                            <span className="text-[9px] bg-emerald-600 text-white font-bold px-1.5 py-0.2 rounded-md flex items-center gap-0.5">
-                              <Star size={9} fill="currentColor" />
-                              Primary
-                            </span>
-                          )}
-                          {acc.customQrImage && (
-                            <span className="text-[9px] bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.2 rounded-md border border-indigo-200">
-                              Custom Image
-                            </span>
-                          )}
-                        </div>
-
-                        <p className="font-mono text-xs text-slate-700 font-bold mt-1">
-                          {acc.upiId}
-                        </p>
-
-                        <div className="flex items-center gap-2 mt-2">
-                          <button
-                            onClick={() => handleCopy(acc.upiId, acc.id)}
-                            className="flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 px-2 py-0.5 rounded-md transition-colors"
-                          >
-                            {copiedId === acc.id ? <Check size={11} className="text-emerald-600" /> : <Copy size={11} />}
-                            {copiedId === acc.id ? 'Copied' : 'Copy ID'}
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              if (displayQr) {
-                                setZoomQr({
-                                  label: acc.label,
-                                  upiId: acc.upiId,
-                                  qrUrl: displayQr,
-                                });
-                              }
-                            }}
-                            className="text-[10px] font-bold text-emerald-700 hover:underline flex items-center gap-0.5"
-                          >
-                            <Maximize2 size={10} />
-                            View QR Code
-                          </button>
-                        </div>
                       </div>
                     </div>
 
-                    {/* Actions: Edit / Set Default / Delete */}
-                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    {/* Bottom Action Buttons: Full Width Tactile Bar */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                       <button
-                        onClick={() => handleStartEditUPI(acc)}
-                        className="flex items-center gap-1 text-[10px] font-bold text-slate-700 hover:text-emerald-700 bg-white hover:bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg transition-all shadow-2xs active:scale-95"
-                        title="Edit Payment Account"
+                        onClick={() => handleCopy(acc.upiId, acc.id)}
+                        className="flex-1 py-1.5 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-98 shadow-2xs"
                       >
-                        <Edit3 size={11} className="text-emerald-600" />
-                        Edit
+                        {copiedId === acc.id ? (
+                          <>
+                            <Check size={12} className="text-emerald-600" />
+                            <span className="text-emerald-700">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={12} className="text-slate-500" />
+                            <span>Copy UPI ID</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (displayQr) {
+                            setZoomQr({
+                              label: acc.label,
+                              upiId: acc.upiId,
+                              qrUrl: displayQr,
+                            });
+                          }
+                        }}
+                        className="flex-1 py-1.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-98 shadow-2xs"
+                      >
+                        <QrCode size={12} />
+                        <span>View QR Code</span>
                       </button>
 
                       {!acc.isDefault && onSetDefaultUPIAccount && (
                         <button
                           onClick={() => onSetDefaultUPIAccount(acc.id)}
-                          className="text-[10px] font-bold text-slate-500 hover:text-emerald-700 bg-white border border-slate-200 px-2 py-1 rounded-lg transition-colors"
+                          className="py-1.5 px-2.5 rounded-xl text-slate-500 hover:text-emerald-700 hover:bg-slate-50 text-[11px] font-bold transition-colors whitespace-nowrap"
                         >
                           Make Primary
-                        </button>
-                      )}
-                      {onDeleteUPIAccount && upiList.length > 1 && (
-                        <button
-                          onClick={() => {
-                            if (confirm(`Remove ${acc.label}?`)) {
-                              onDeleteUPIAccount(acc.id);
-                            }
-                          }}
-                          className="text-slate-400 hover:text-rose-600 p-1"
-                          title="Delete UPI"
-                        >
-                          <Trash2 size={13} />
                         </button>
                       )}
                     </div>

@@ -8,14 +8,14 @@ interface AuthModalProps {
   accounts: UserAccount[];
   currentAccount: UserAccount | null;
   onSignUp: (data: {
-    username: string;
+    name: string;
     email: string;
     password: string;
-    name: string;
+    username?: string;
     upiId?: string;
   }) => Promise<{ success: boolean; error?: string }> | { success: boolean; error?: string };
   onSignIn: (
-    emailOrUsername: string,
+    email: string,
     password: string
   ) => Promise<{ success: boolean; error?: string }> | { success: boolean; error?: string };
   onSwitchAccount: (userId: string) => void;
@@ -33,12 +33,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [mode, setMode] = useState<'SIGNIN' | 'SIGNUP'>('SIGNIN');
 
   // Sign In fields
-  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
   // Sign Up fields
   const [name, setName] = useState('');
-  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [upiId, setUpiId] = useState('');
@@ -50,7 +49,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleSignInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    const res = await onSignIn(loginIdentifier, loginPassword);
+    const cleanEmail = loginEmail.trim().toLowerCase();
+    if (!cleanEmail || !loginPassword) {
+      setErrorMsg('Please enter your email and password.');
+      return;
+    }
+    const res = await onSignIn(cleanEmail, loginPassword);
     if (!res.success) {
       setErrorMsg(res.error || 'Failed to sign in.');
     } else {
@@ -61,15 +65,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleSignUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    if (!username.trim() || !email.trim() || !password || !name.trim()) {
-      setErrorMsg('Please fill in all required fields.');
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name.trim();
+    if (!cleanEmail || !password || !cleanName) {
+      setErrorMsg('Please fill in Name, Email, and Password.');
+      return;
+    }
+    if (password.length < 6) {
+      setErrorMsg('Password must be at least 6 characters.');
       return;
     }
     const res = await onSignUp({
-      username,
-      email,
+      name: cleanName,
+      email: cleanEmail,
       password,
-      name,
+      username: cleanEmail.split('@')[0],
       upiId: upiId.trim() || undefined,
     });
     if (!res.success) {
@@ -147,18 +157,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <form onSubmit={handleSignInSubmit} className="space-y-3">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                  Username or Email
+                  Email Address
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-2.5 text-slate-400">
-                    <User size={15} />
+                    <Mail size={15} />
                   </span>
                   <input
-                    type="text"
+                    type="email"
                     required
-                    placeholder="e.g. rahul or rahul@example.com"
-                    value={loginIdentifier}
-                    onChange={(e) => setLoginIdentifier(e.target.value)}
+                    placeholder="e.g. rahul@example.com"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-500 font-medium"
                   />
                 </div>
@@ -207,31 +217,58 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                    Username *
-                  </label>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Email Address *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-slate-400">
+                    <Mail size={15} />
+                  </span>
                   <input
-                    type="text"
+                    type="email"
                     required
-                    placeholder="e.g. rohit"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-500 font-medium"
+                    placeholder="you@gmail.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-500"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                    UPI ID (Optional)
-                  </label>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Primary UPI ID (Optional)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-slate-400">
+                    <CreditCard size={15} />
+                  </span>
                   <input
                     type="text"
                     placeholder="rohit@okaxis"
                     value={upiId}
                     onChange={(e) => setUpiId(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-500 font-medium"
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Password *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-slate-400">
+                    <Lock size={15} />
+                  </span>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Minimum 6 characters"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-500"
                   />
                 </div>
               </div>

@@ -27,14 +27,14 @@ import {
 
 interface AuthScreenProps {
   onSignIn: (
-    identifier: string,
+    email: string,
     pass: string
   ) => Promise<{ success: boolean; error?: string; account?: UserAccount }> | { success: boolean; error?: string; account?: UserAccount };
   onSignUp: (data: {
-    username: string;
     email: string;
     password: string;
     name: string;
+    username?: string;
     phone?: string;
     upiId?: string;
     avatar?: string;
@@ -52,19 +52,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [mode, setMode] = useState<'SIGNIN' | 'SIGNUP' | 'FORGOT'>('SIGNIN');
 
   // Sign In inputs
-  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Sign Up inputs
   const [name, setName] = useState('');
-  const [username, setUsername] = useState('');
-  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showSignUpPassword, setShowSignUpPassword] = useState(false);
   const [upiId, setUpiId] = useState('');
-  const [avatar, setAvatar] = useState('👨‍💻');
+  const [avatar, setAvatar] = useState('😎');
 
   // Forgot Password input
   const [forgotEmail, setForgotEmail] = useState('');
@@ -84,7 +82,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
     if (!isFirebaseConfigured()) {
       setErrorMsg(
-        'Firebase keys not detected in .env file. Please add VITE_FIREBASE_API_KEY in .env, or use Mobile/Email sign in below!'
+        'Firebase keys not detected in .env file. Please add VITE_FIREBASE_API_KEY in .env, or use Email sign in below!'
       );
       setLoading(false);
       return;
@@ -106,29 +104,24 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     }
   };
 
-  // Sign In with Identifier (Mobile / Username / Email)
+  // Sign In with Email & Password
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
     setVerificationBanner(null);
 
-    if (!loginIdentifier.trim() || !loginPassword) {
-      setErrorMsg('Please enter your username, email, or mobile number and password.');
+    const cleanEmail = loginEmail.trim().toLowerCase();
+    if (!cleanEmail || !loginPassword) {
+      setErrorMsg('Please enter your email address and password.');
       return;
     }
 
     setLoading(true);
 
-    // If identifier is an email and Firebase is enabled, try Firebase Auth first (skip demo email)
-    if (
-      loginIdentifier.includes('@') &&
-      !loginIdentifier.toLowerCase().includes('demo@') &&
-      !loginIdentifier.toLowerCase().includes('rahul@') &&
-      isFirebaseConfigured()
-    ) {
+    if (isFirebaseConfigured()) {
       try {
-        const fbRes = await signInWithEmail(loginIdentifier.trim(), loginPassword);
+        const fbRes = await signInWithEmail(cleanEmail, loginPassword);
         if (fbRes.success && fbRes.account) {
           if (!fbRes.emailVerified) {
             setVerificationBanner(
@@ -147,35 +140,44 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     }
 
     // Local / Backend Store sign-in
-    const res = await onSignIn(loginIdentifier.trim(), loginPassword);
+    const res = await onSignIn(cleanEmail, loginPassword);
     setLoading(false);
     if (!res.success) {
-      setErrorMsg(res.error || 'Invalid credentials.');
+      setErrorMsg(res.error || 'Invalid email or password.');
     }
   };
 
-  // Sign Up Handler
+  // Sign Up Handler (Clean & Minimal)
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    if (!name.trim() || !username.trim() || !email.trim() || !password) {
-      setErrorMsg('Please fill in all required fields (Name, Username, Email, Password).');
+    const cleanName = name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanName || !cleanEmail || !password) {
+      setErrorMsg('Please enter your full name, email address, and password.');
       return;
     }
 
+    if (password.length < 6) {
+      setErrorMsg('Password must be at least 6 characters long.');
+      return;
+    }
+
+    const autoUsername = cleanEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '') || 'user';
+
     setLoading(true);
 
-    // If Firebase is configured, register through Firebase Auth + send verification link!
+    // If Firebase is configured, register through Firebase Auth + send verification link
     if (isFirebaseConfigured()) {
       try {
         const fbRes = await signUpWithEmail({
-          email: email.trim(),
+          email: cleanEmail,
           password,
-          name: name.trim(),
-          username: username.trim(),
-          phone: phone.trim() || undefined,
+          name: cleanName,
+          username: autoUsername,
           upiId: upiId.trim() || undefined,
           avatar,
         });
@@ -201,10 +203,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
     // Default fast store signup
     const res = await onSignUp({
-      name: name.trim(),
-      username: username.trim(),
-      phone: phone.trim() || undefined,
-      email: email.trim(),
+      name: cleanName,
+      username: autoUsername,
+      email: cleanEmail,
       password,
       upiId: upiId.trim() || undefined,
       avatar,
@@ -428,40 +429,22 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 </div>
               </form>
             ) : mode === 'SIGNIN' ? (
-              /* SIGN IN FORM */
-              <form onSubmit={handleSignIn} className="space-y-3.5">
-                {/* 1-Click Demo Fill Banner */}
-                <div className="p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-100 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium truncate">
-                    <span className="text-sm">⚡</span>
-                    <span className="truncate">Demo: <strong className="text-slate-900 font-bold">demo</strong> • <strong className="text-slate-900 font-bold">demo123</strong></span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginIdentifier('demo');
-                      setLoginPassword('demo123');
-                    }}
-                    className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shrink-0 transition-all active:scale-95 shadow-2xs"
-                  >
-                    Autofill
-                  </button>
-                </div>
-
+              /* SIGN IN FORM (Clean Email & Password) */
+              <form onSubmit={handleSignIn} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                    Mobile No., Username, or Email
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Email Address
                   </label>
                   <div className="relative">
                     <span className="absolute left-3.5 top-3 text-slate-400">
-                      <User size={16} />
+                      <Mail size={16} />
                     </span>
                     <input
-                      type="text"
+                      type="email"
                       required
-                      placeholder="e.g. 9876543210, rahul, or rahul@gmail.com"
-                      value={loginIdentifier}
-                      onChange={(e) => setLoginIdentifier(e.target.value)}
+                      placeholder="e.g. yourname@gmail.com"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
                       className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
                     />
                   </div>
@@ -469,7 +452,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
                       Password
                     </label>
                     <button
@@ -538,11 +521,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 </div>
               </form>
             ) : (
-              /* SIGN UP FORM */
+              /* SIGN UP FORM (Simple: Name, Email, Password, Optional UPI) */
               <form onSubmit={handleSignUp} className="space-y-3">
                 {/* Avatar Selection */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
                     Choose Your Avatar
                   </label>
                   <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -564,58 +547,27 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
                     Full Name *
                   </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Rahul Verma"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-hidden focus:border-emerald-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                      Username *
-                    </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-slate-400">
+                      <User size={15} />
+                    </span>
                     <input
                       type="text"
                       required
-                      placeholder="e.g. rahul12"
-                      value={username}
-                      onChange={(e) =>
-                        setUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))
-                      }
-                      className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-500 font-mono"
+                      placeholder="e.g. Rahul Sharma"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-500"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                      Mobile No.
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-2.5 top-2 text-[11px] font-bold text-slate-400">
-                        🇮🇳
-                      </span>
-                      <input
-                        type="tel"
-                        placeholder="9876543210"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className="w-full pl-8 pr-2.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 focus:outline-hidden focus:border-emerald-500 font-mono"
-                      />
-                    </div>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                    Email Address * (For Verification Link)
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Email Address *
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-2.5 text-slate-400">
@@ -633,7 +585,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
                     Primary UPI ID (Optional)
                   </label>
                   <div className="relative">
@@ -651,7 +603,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
                     Password *
                   </label>
                   <div className="relative">
