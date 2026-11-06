@@ -289,10 +289,20 @@ export function connectWebSocket(onStateUpdate: (data: any) => void) {
       connect();
     }
   };
+
+  const handleOnline = () => {
+    reconnectAttempts = 0;
+    if (!ws || ws.readyState === WebSocket.CLOSED) {
+      connect();
+    }
+  };
+
   document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('online', handleOnline);
 
   return () => {
     document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.removeEventListener('online', handleOnline);
     if (reconnectTimer) clearTimeout(reconnectTimer);
     ws?.close();
   };

@@ -31,7 +31,9 @@ export function generateWhatsAppNudge({
   }
 
   if (lenderUpi) {
-    message += `\n\nPay via UPI: ${lenderUpi}\nOr click to pay on SplitShare!`;
+    message += `\n\nPay via UPI: ${lenderUpi}\nOr settle directly on SplitShare: https://split-share-puce.vercel.app`;
+  } else {
+    message += `\n\nView details & settle on SplitShare: https://split-share-puce.vercel.app`;
   }
 
   return `https://wa.me/?text=${encodeURIComponent(message)}`;

@@ -386,6 +386,16 @@ function broadcastScopedState() {
 
 // --- REST API ENDPOINTS ---
 
+// Health check endpoint (for monitoring, auto-recovery & Render free tier anti-sleep ping)
+app.get('/api/health', (_req: Request, res: Response) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptimeSeconds: Math.floor(process.uptime()),
+    database: isMongoConnected ? 'mongodb-atlas' : 'local-json',
+  });
+});
+
 // Scoped State Endpoint (Requires Auth)
 app.get('/api/state', requireAuth, (req: AuthenticatedRequest, res: Response) => {
   const state = getScopedStateForUser(req.user!.id, req.user!.email);

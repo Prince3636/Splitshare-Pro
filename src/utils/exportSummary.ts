@@ -35,7 +35,7 @@ export function generateGroupWhatsAppSummary({
     });
   }
 
-  text += `\nShared via SplitShare 💸`;
+  text += `\nShared via SplitShare 💸 https://split-share-puce.vercel.app`;
   return text;
 }
 
