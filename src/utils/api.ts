@@ -47,6 +47,24 @@ export function setStoredToken(token: string | null) {
   }
 }
 
+export function formatFriendlyApiError(err: any): string {
+  if (!err) return 'Service is temporarily unavailable. Please try again.';
+  const str = typeof err === 'string' ? err : err.message || '';
+  if (/fetch|network|offline|econnrefused|load failed|networkerror/i.test(str)) {
+    return 'Service is temporarily unreachable. Please check your internet connection or try again shortly.';
+  }
+  if (/timeout|timed out/i.test(str)) {
+    return 'Connection timed out. Server is taking a moment to respond, please retry.';
+  }
+  if (/json|syntaxerror/i.test(str)) {
+    return 'Service is temporarily updating. Please refresh in a moment.';
+  }
+  if (/MongoError|CastError|ValidationError|TypeError|ReferenceError/i.test(str)) {
+    return 'A temporary service hiccup occurred. Please try again.';
+  }
+  return str || 'Service is temporarily unavailable. Please try again.';
+}
+
 async function apiFetch(endpoint: string, options: RequestInit = {}) {
   const base = getBackendBaseUrl();
   const url = base ? `${base}${endpoint}` : endpoint;
@@ -69,15 +87,40 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
         localStorage.removeItem('splitshare_auth_account_v5');
         window.dispatchEvent(new CustomEvent('splitshare:unauthorized'));
       } catch {}
-      return { success: false, status: 401, error: 'Unauthorized: Session expired or invalid.' };
+      return { success: false, status: 401, error: 'Your session has expired. Please sign in again.' };
     }
+
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      return {
+        success: false,
+        status: res.status,
+        error: 'Service is temporarily waking up or updating. Please try again in a few moments.',
+      };
+    }
+
+    if (res.status >= 500) {
+      return {
+        success: false,
+        status: res.status,
+        error: 'Service is temporarily unavailable. Please try again shortly.',
+      };
+    }
+
     const contentType = res.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      return await res.json();
+      const data = await res.json();
+      if (data && !data.success && data.error) {
+        data.error = formatFriendlyApiError(data.error);
+      }
+      return data;
     }
     return { success: res.ok, status: res.status };
   } catch (err: any) {
-    return { success: false, offline: true, error: err.message || 'Backend is currently offline' };
+    return {
+      success: false,
+      offline: true,
+      error: formatFriendlyApiError(err),
+    };
   }
 }
 

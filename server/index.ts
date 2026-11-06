@@ -470,7 +470,7 @@ app.post('/api/auth/signup', authLimiter, async (req: Request, res: Response) =>
     res.json({ success: true, token, account: sanitizeAccount(newAccount) });
   } catch (err: any) {
     console.error('Signup error:', err);
-    res.status(500).json({ success: false, error: 'Internal server error during signup.' });
+    res.status(500).json({ success: false, error: 'Service is temporarily busy. Please try signing up again in a moment.' });
   }
 });
 
@@ -507,7 +507,7 @@ app.post('/api/auth/signin', authLimiter, async (req: Request, res: Response) =>
     res.json({ success: true, token, account: sanitizeAccount(found) });
   } catch (err: any) {
     console.error('Signin error:', err);
-    res.status(500).json({ success: false, error: 'Internal server error during signin.' });
+    res.status(500).json({ success: false, error: 'Service is temporarily busy. Please try signing in again in a moment.' });
   }
 });
 
@@ -571,7 +571,8 @@ app.post('/api/auth/federated', authLimiter, async (req: Request, res: Response)
 
     res.json({ success: true, token, account: sanitizeAccount(found) });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: 'Federated authentication failed.' });
+    console.error('Federated auth error:', err);
+    res.status(500).json({ success: false, error: 'Authentication service temporarily busy. Please try again shortly.' });
   }
 });
 

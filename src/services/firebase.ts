@@ -53,6 +53,54 @@ if (isFirebaseConfigured()) {
   }
 }
 
+export function getFriendlyFirebaseError(error: any, fallback: string = 'Service temporarily unavailable. Please try again.'): string {
+  if (!error) return fallback;
+  const code = error.code || '';
+  const message = error.message || '';
+
+  if (code === 'auth/popup-closed-by-user') {
+    return 'Sign-in window was closed. Tap Google Sign-in to try again.';
+  }
+  if (code === 'auth/popup-blocked') {
+    return 'Pop-up window was blocked by your browser. Please allow pop-ups for SplitShare.';
+  }
+  if (code === 'auth/cancelled-popup-request') {
+    return 'Sign-in request restarted. Please continue in the active popup.';
+  }
+  if (code === 'auth/network-request-failed' || /network|failed to fetch/i.test(message)) {
+    return 'Network connection issue. Please check your internet and try again.';
+  }
+  if (code === 'auth/email-already-in-use') {
+    return 'This email is already registered. Please sign in with your password or Google.';
+  }
+  if (
+    code === 'auth/wrong-password' ||
+    code === 'auth/invalid-credential' ||
+    code === 'auth/user-not-found'
+  ) {
+    return 'Incorrect email or password. Please verify your credentials.';
+  }
+  if (code === 'auth/weak-password') {
+    return 'Password is too short. Please choose at least 6 characters.';
+  }
+  if (code === 'auth/invalid-email') {
+    return 'Please enter a valid email address.';
+  }
+  if (code === 'auth/too-many-requests') {
+    return 'Too many login attempts. For security, please wait a minute before trying again.';
+  }
+  if (code === 'auth/user-disabled') {
+    return 'This account is currently inactive. Please contact support.';
+  }
+  if (code === 'auth/unauthorized-domain') {
+    return 'Authentication service is not configured for this domain yet.';
+  }
+  if (code.startsWith('auth/') || message.includes('Firebase:')) {
+    return 'Authentication service is temporarily busy. Please try again in a moment.';
+  }
+  return message || fallback;
+}
+
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
@@ -124,7 +172,7 @@ export async function signInWithGoogle(): Promise<{
     console.error('Google Sign-In Error:', error);
     return {
       success: false,
-      error: error.message || 'Google sign-in failed. Please try again.',
+      error: getFriendlyFirebaseError(error, 'Google sign-in could not be completed. Please try again.'),
     };
   }
 }
@@ -202,15 +250,10 @@ export async function signUpWithEmail(data: {
 
     return { success: true, account, verificationSent };
   } catch (error: any) {
-    let msg = error.message || 'Registration failed.';
-    if (error.code === 'auth/email-already-in-use') {
-      msg = 'This email is already registered. Please sign in instead.';
-    } else if (error.code === 'auth/weak-password') {
-      msg = 'Password should be at least 6 characters.';
-    } else if (error.code === 'auth/invalid-email') {
-      msg = 'Please enter a valid email address.';
-    }
-    return { success: false, error: msg };
+    return {
+      success: false,
+      error: getFriendlyFirebaseError(error, 'Registration could not be completed. Please try again.'),
+    };
   }
 }
 
@@ -272,15 +315,10 @@ export async function signInWithEmail(
       emailVerified: fbUser.emailVerified,
     };
   } catch (error: any) {
-    let msg = error.message || 'Login failed.';
-    if (
-      error.code === 'auth/wrong-password' ||
-      error.code === 'auth/invalid-credential' ||
-      error.code === 'auth/user-not-found'
-    ) {
-      msg = 'Invalid email or password. Please verify your credentials.';
-    }
-    return { success: false, error: msg };
+    return {
+      success: false,
+      error: getFriendlyFirebaseError(error, 'Incorrect email or password. Please verify your credentials.'),
+    };
   }
 }
 
@@ -304,7 +342,7 @@ export async function sendPasswordReset(email: string): Promise<{
   } catch (error: any) {
     return {
       success: false,
-      error: error.message || 'Could not send password reset email.',
+      error: getFriendlyFirebaseError(error, 'Could not send password reset email. Please try again.'),
     };
   }
 }
@@ -329,7 +367,7 @@ export async function resendVerificationEmail(): Promise<{
   } catch (error: any) {
     return {
       success: false,
-      error: error.message || 'Failed to send verification link.',
+      error: getFriendlyFirebaseError(error, 'Failed to send verification link. Please try again.'),
     };
   }
 }

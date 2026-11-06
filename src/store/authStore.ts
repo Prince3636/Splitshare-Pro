@@ -10,6 +10,7 @@ import {
   apiDeleteAccount,
   setStoredToken,
   getStoredToken,
+  formatFriendlyApiError,
 } from '../utils/api';
 
 const ACCOUNT_STORAGE_KEY = 'splitshare_auth_account_v5';
@@ -105,7 +106,7 @@ export function useAuthStore() {
 
       return { success: false, error: res?.error || 'Registration failed.' };
     } catch (e: any) {
-      return { success: false, error: e?.message || 'Network error during signup.' };
+      return { success: false, error: formatFriendlyApiError(e) };
     }
   };
 
@@ -131,7 +132,7 @@ export function useAuthStore() {
     } catch (e: any) {
       return {
         success: false,
-        error: e?.message || 'Error connecting to authentication service.',
+        error: formatFriendlyApiError(e),
       };
     }
   };
@@ -154,7 +155,7 @@ export function useAuthStore() {
       }
       return { success: false, error: res?.error || 'Failed to delete account.' };
     } catch (e: any) {
-      return { success: false, error: e.message || 'Error during account deletion.' };
+      return { success: false, error: formatFriendlyApiError(e) };
     }
   };
 
