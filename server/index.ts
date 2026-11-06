@@ -1184,3 +1184,25 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🛡️ SplitShare Production-Hardened Server running on port ${PORT}`);
 });
+
+// Process-level Crash Resilience & Graceful Shutdown
+process.on('uncaughtException', (err) => {
+  console.error('🛡️ Uncaught Exception intercepted:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('🛡️ Unhandled Rejection intercepted:', reason);
+});
+
+const gracefulShutdown = () => {
+  console.log('🛡️ Gracefully shutting down SplitShare server...');
+  server.close(() => {
+    mongoose.disconnect().then(() => {
+      console.log('🛡️ Closed MongoDB connection. Exiting process safely.');
+      process.exit(0);
+    });
+  });
+};
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
