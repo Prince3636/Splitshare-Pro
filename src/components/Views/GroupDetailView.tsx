@@ -3,6 +3,7 @@ import { Group, Member, Expense, Settlement, KittyContribution, KittyExpense, Ch
 import { calculateBalances } from '../../utils/debtSimplifier';
 import { formatCurrency, formatRelativeDate, CATEGORY_DETAILS } from '../../utils/formatters';
 import { formatForeignExpense } from '../../utils/currencies';
+import { haptics } from '../../utils/haptics';
 import { 
   Plus, 
   ArrowUpRight, 
@@ -103,6 +104,7 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   const handleSendChat = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!chatText.trim() && !chatMedia) return;
+    haptics.light();
     if (onSendMessage) {
       onSendMessage(chatText.trim(), chatMedia || undefined);
     }

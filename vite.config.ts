@@ -5,6 +5,28 @@ import tailwindcss from '@tailwindcss/vite';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes('node_modules/firebase')) {
+            return 'vendor-firebase';
+          }
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'vendor-react';
+          }
+          if (
+            id.includes('node_modules/lucide-react') ||
+            id.includes('node_modules/canvas-confetti') ||
+            id.includes('node_modules/qrcode')
+          ) {
+            return 'vendor-ui';
+          }
+        },
+      },
+    },
+    chunkSizeWarningLimit: 800,
+  },
   server: {
     port: 5173,
     host: true,

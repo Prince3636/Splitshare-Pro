@@ -15,6 +15,16 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /* Fast tap response (removes 300ms mobile touch delay) */
+  button, a, [role="button"] {
+    touch-action: manipulation;
+  }
+
+  /* Smooth momentum scrolling on mobile devices */
+  .overflow-y-auto, .overflow-y-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+
   /* Prevent iOS automatic zoom on focus while preserving sleek appearance */
   @media screen and (max-width: 640px) {
     input[type="text"],

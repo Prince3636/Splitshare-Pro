@@ -7,6 +7,7 @@ import { Header } from './components/Layout/Header';
 import { BottomNav, NavTab } from './components/Layout/BottomNav';
 import { FloatingAlert } from './components/Common/FloatingAlert';
 import { ArrowLeft } from 'lucide-react';
+import { haptics } from './utils/haptics';
 
 const AuthScreen = React.lazy(() => import('./components/Auth/AuthScreen').then(m => ({ default: m.AuthScreen })));
 
@@ -386,6 +387,7 @@ export const App: React.FC = () => {
         <BottomNav
           activeTab={activeTab}
           onChangeTab={(t) => {
+            haptics.light();
             setActiveTab(t);
           }}
           pendingApprovalsCount={pendingApprovalsCount}
@@ -401,6 +403,7 @@ export const App: React.FC = () => {
                 group={activeSelectedGroup}
                 currentUser={currentUser}
                 onAddExpense={(exp) => {
+                  haptics.medium();
                   addExpense(exp);
                 }}
               />
@@ -476,6 +479,7 @@ export const App: React.FC = () => {
               amount={settleData.amount}
               groupName={activeSelectedGroup?.name || 'Group'}
               onConfirmSettlement={(settlement) => {
+                haptics.success();
                 recordSettlement({
                   ...settlement,
                   groupId: activeSelectedGroup?.id || groups[0]?.id || 'g1',
