@@ -89,10 +89,10 @@ export async function fetchState() {
   return apiFetch('/api/state');
 }
 
-export async function apiFederatedAuth(account: any) {
+export async function apiFederatedAuth(account: any, idToken?: string) {
   return apiFetch('/api/auth/federated', {
     method: 'POST',
-    body: JSON.stringify({ account }),
+    body: JSON.stringify({ account, idToken: idToken || account?.idToken }),
   });
 }
 

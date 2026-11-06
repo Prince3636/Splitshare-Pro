@@ -25,6 +25,7 @@ export interface UserAccount {
   upiAccounts?: UPIAccount[];
   phone?: string;
   token?: string;
+  idToken?: string;
   emailVerified?: boolean;
   authProvider?: 'password' | 'google' | 'phone';
   preferredCurrency?: string;

@@ -51,6 +51,9 @@ if (!fs.existsSync(DATA_DIR)) {
 
 // Secure JWT Secret from environment (never hardcode in production)
 const JWT_SECRET = process.env.JWT_SECRET || 'splitshare-prod-secret-key-change-in-env-984729';
+if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET.includes('splitshare-prod-secret'))) {
+  console.warn('⚠️ SECURITY WARNING: Using default/weak JWT_SECRET in production. Set a random JWT_SECRET in environment variables.');
+}
 
 // MongoDB Atlas Configuration & Flexible Auto-Sync
 const MONGODB_URI = process.env.MONGODB_URI || '';
@@ -248,14 +251,62 @@ const app = express();
 
 // Security Headers & Rate Limiting
 app.use(helmet());
-app.use(cors());
+
+// Hardened CORS policy: Restrict to official web app, Capacitor mobile origins & local development
+const allowedOrigins = [
+  'https://split-share-puce.vercel.app',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'capacitor://localhost',
+  'ionic://localhost',
+  'http://localhost',
+];
+
+if (process.env.CORS_ALLOWED_ORIGINS) {
+  const custom = process.env.CORS_ALLOWED_ORIGINS.split(',').map((o) => o.trim());
+  allowedOrigins.push(...custom);
+}
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (such as mobile apps, native curl, or Capacitor webview)
+      if (!origin) return callback(null, true);
+      if (
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app') ||
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:') ||
+        origin.startsWith('http://192.168.') ||
+        origin.startsWith('http://10.')
+      ) {
+        return callback(null, true);
+      }
+      return callback(new Error('Blocked by SplitShare CORS policy'));
+    },
+    credentials: true,
+  })
+);
+
 app.use(express.json({ limit: '2mb' })); // Reduced from 10MB to protect memory
+
+// Global API rate limiter: max 300 requests per 15 minutes per IP
+const globalApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  message: { success: false, error: 'Too many requests. Please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', globalApiLimiter);
 
 // Rate limiter for auth endpoints: max 30 requests per 15 minutes per IP
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
-  message: { success: false, error: 'Too many requests. Please try again after 15 minutes.' },
+  message: { success: false, error: 'Too many authentication attempts. Please try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // Authentication Middleware
@@ -453,12 +504,34 @@ app.post('/api/auth/signin', authLimiter, async (req: Request, res: Response) =>
 // Federated / Social Sign-In (Exchanges verified profile for SplitShare JWT)
 app.post('/api/auth/federated', authLimiter, async (req: Request, res: Response) => {
   try {
-    const { account } = req.body;
+    const { account, idToken } = req.body;
     if (!account || !account.id || !account.email) {
       return res.status(400).json({ success: false, error: 'Valid account profile required.' });
     }
 
     const cleanEmail = account.email.trim().toLowerCase();
+
+    // Cryptographic token verification for Google / Firebase identities
+    if (idToken) {
+      try {
+        const verifyRes = await fetch(
+          `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`
+        );
+        if (verifyRes.ok) {
+          const tokenInfo = (await verifyRes.json()) as any;
+          if (tokenInfo.email && tokenInfo.email.toLowerCase() !== cleanEmail) {
+            return res.status(401).json({ success: false, error: 'Email does not match verified identity token.' });
+          }
+        } else {
+          return res.status(401).json({ success: false, error: 'Invalid Google identity token.' });
+        }
+      } catch (tokenErr) {
+        console.warn('Identity token verification unreachable:', tokenErr);
+      }
+    } else if (process.env.NODE_ENV === 'production') {
+      return res.status(401).json({ success: false, error: 'Cryptographic identity token is required for federated sign-in.' });
+    }
+
     let found = (db.accounts || []).find(
       (a: any) => a.id === account.id || a.email.toLowerCase() === cleanEmail
     );
@@ -645,6 +718,11 @@ app.post('/api/groups/:id/invite', requireAuth, (req: AuthenticatedRequest, res:
   const group = (db.groups || []).find((g: any) => g.id === id);
   if (!group) return res.status(404).json({ success: false, error: 'Group not found.' });
 
+  // Authorization check: Only existing group members can invite others
+  if (!(group.members || []).some((m: any) => m.id === inviterId)) {
+    return res.status(403).json({ success: false, error: 'Only members of this group can send invitations.' });
+  }
+
   const inviter = (db.accounts || []).find((a: any) => a.id === inviterId);
   const inviterName = inviter?.name || 'A group member';
   const cleanEmail = (email || '').trim().toLowerCase();
@@ -694,6 +772,12 @@ app.post('/api/invites/:id/accept', requireAuth, (req: AuthenticatedRequest, res
   const invite = (db.invites || []).find((i: any) => i.id === id);
   if (!invite) return res.status(404).json({ success: false, error: 'Invite not found.' });
 
+  // Authorization check: User email must match invite email
+  const cleanUserEmail = (req.user!.email || user?.email || '').toLowerCase();
+  if (invite.invitedEmail && invite.invitedEmail.toLowerCase() !== cleanUserEmail) {
+    return res.status(403).json({ success: false, error: 'You are not authorized to accept this invite.' });
+  }
+
   const group = (db.groups || []).find((g: any) => g.id === invite.groupId);
   if (group && user) {
     if (!group.members.some((m: any) => m.id === user.id || m.email === user.email)) {
@@ -721,11 +805,17 @@ app.post('/api/invites/:id/accept', requireAuth, (req: AuthenticatedRequest, res
 app.post('/api/invites/:id/decline', requireAuth, (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const invite = (db.invites || []).find((i: any) => i.id === id);
-  if (invite) {
-    invite.status = 'DECLINED';
-    saveDatabase();
-    broadcastScopedState();
+  if (!invite) return res.status(404).json({ success: false, error: 'Invite not found.' });
+
+  // Authorization check: User email must match invite email
+  const cleanUserEmail = (req.user!.email || '').toLowerCase();
+  if (invite.invitedEmail && invite.invitedEmail.toLowerCase() !== cleanUserEmail) {
+    return res.status(403).json({ success: false, error: 'You are not authorized to decline this invite.' });
   }
+
+  invite.status = 'DECLINED';
+  saveDatabase();
+  broadcastScopedState();
   res.json({ success: true });
 });
 
@@ -832,6 +922,12 @@ app.post('/api/expenses/:id/respond', requireAuth, (req: AuthenticatedRequest, r
   const expense = (db.expenses || []).find((e: any) => e.id === id);
   if (!expense) return res.status(404).json({ success: false, error: 'Expense not found.' });
 
+  // Authorization check: Caller must be a member of the group where the bill was added
+  const group = (db.groups || []).find((g: any) => g.id === expense.groupId);
+  if (!group || !(group.members || []).some((m: any) => m.id === memberId)) {
+    return res.status(403).json({ success: false, error: 'Access denied: You are not a member of this group.' });
+  }
+
   if (!['ACCEPTED', 'DISPUTED'].includes(status)) {
     return res.status(400).json({ success: false, error: 'Status must be ACCEPTED or DISPUTED.' });
   }
@@ -893,6 +989,15 @@ app.post('/api/settlements', requireAuth, (req: AuthenticatedRequest, res: Respo
   const group = (db.groups || []).find((g: any) => g.id === groupId);
   if (!group) return res.status(404).json({ success: false, error: 'Group not found.' });
 
+  // Authorization checks: Debtor and Creditor must both be members of this group
+  if (!(group.members || []).some((m: any) => m.id === debtorId)) {
+    return res.status(403).json({ success: false, error: 'You are not a member of this group.' });
+  }
+
+  if (creditorId && !(group.members || []).some((m: any) => m.id === creditorId)) {
+    return res.status(400).json({ success: false, error: 'Payment recipient is not a member of this group.' });
+  }
+
   const debtor = (db.accounts || []).find((a: any) => a.id === debtorId);
   const debtorName = debtor?.name || 'Someone';
 
@@ -937,6 +1042,14 @@ app.post('/api/kitty/contribute', requireAuth, (req: AuthenticatedRequest, res: 
     return res.status(400).json({ success: false, error: 'Valid contribution amount required.' });
   }
 
+  const group = (db.groups || []).find((g: any) => g.id === groupId);
+  if (!group) return res.status(404).json({ success: false, error: 'Group not found.' });
+
+  // Authorization check: Caller must be a group member
+  if (!(group.members || []).some((m: any) => m.id === memberId)) {
+    return res.status(403).json({ success: false, error: 'You are not a member of this group.' });
+  }
+
   const entry = {
     id: 'k_' + crypto.randomUUID(),
     groupId,
@@ -960,6 +1073,14 @@ app.post('/api/kitty/expense', requireAuth, (req: AuthenticatedRequest, res: Res
   const numAmount = Number(amount);
   if (!numAmount || numAmount <= 0 || !title?.trim()) {
     return res.status(400).json({ success: false, error: 'Title and positive amount required.' });
+  }
+
+  const group = (db.groups || []).find((g: any) => g.id === groupId);
+  if (!group) return res.status(404).json({ success: false, error: 'Group not found.' });
+
+  // Authorization check: Caller must be a group member
+  if (!(group.members || []).some((m: any) => m.id === addedById)) {
+    return res.status(403).json({ success: false, error: 'You are not a member of this group.' });
   }
 
   const expense = {
@@ -1001,6 +1122,26 @@ app.post('/api/groups/:groupId/messages', requireAuth, (req: AuthenticatedReques
     return res.status(400).json({ success: false, error: 'Message text or media is required.' });
   }
 
+  const cleanText = (text || '').trim();
+  if (cleanText.length > 2000) {
+    return res.status(400).json({ success: false, error: 'Message text cannot exceed 2000 characters.' });
+  }
+
+  // Validate and cap mediaUrl (max 800KB base64 payload to prevent memory exhaustion / DoS)
+  let cleanMediaUrl: string | undefined = undefined;
+  if (mediaUrl) {
+    if (typeof mediaUrl !== 'string') {
+      return res.status(400).json({ success: false, error: 'Invalid media format.' });
+    }
+    if (mediaUrl.length > 800 * 1024) {
+      return res.status(400).json({ success: false, error: 'Attached photo is too large (max 600KB allowed).' });
+    }
+    if (!mediaUrl.startsWith('data:image/') && !mediaUrl.startsWith('https://')) {
+      return res.status(400).json({ success: false, error: 'Only image attachments are allowed.' });
+    }
+    cleanMediaUrl = mediaUrl;
+  }
+
   const group = (db.groups || []).find((g: any) => g.id === groupId);
   if (!group || !(group.members || []).some((m: any) => m.id === req.user!.id)) {
     return res.status(403).json({ success: false, error: 'Access denied to group chat.' });
@@ -1014,8 +1155,8 @@ app.post('/api/groups/:groupId/messages', requireAuth, (req: AuthenticatedReques
     senderId: req.user!.id,
     senderName: sender?.name || req.user!.username || 'Member',
     senderAvatar: sender?.avatar || '😎',
-    text: (text || '').trim(),
-    mediaUrl: mediaUrl || undefined,
+    text: cleanText,
+    mediaUrl: cleanMediaUrl,
     createdAt: new Date().toISOString(),
   };
 

@@ -12,12 +12,13 @@ export interface UPIParams {
 }
 
 export function generateUPILink({ upiId, payeeName, amount, note }: UPIParams): string {
-  const cleanUPI = upiId.trim();
-  const cleanName = encodeURIComponent(payeeName.trim());
+  // Strict sanitization: strip invalid URI injection characters, keep only valid VPA characters
+  const cleanUPI = (upiId || '').trim().replace(/[^a-zA-Z0-9.\-_@]/g, '');
+  const cleanName = encodeURIComponent((payeeName || 'Member').trim());
   const cleanNote = encodeURIComponent(note || 'SplitShare Bill Settlement');
-  const formattedAmount = amount.toFixed(2);
+  const formattedAmount = Number(amount || 0).toFixed(2);
 
-  // Standard NPCI UPI URI Specification
+  // Standard NPCI UPI URI Specification (literal @ is expected by banking apps)
   return `upi://pay?pa=${cleanUPI}&pn=${cleanName}&am=${formattedAmount}&cu=INR&tn=${cleanNote}`;
 }
 

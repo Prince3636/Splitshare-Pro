@@ -89,6 +89,11 @@ export async function signInWithGoogle(): Promise<{
       }
     }
 
+    let idToken = '';
+    try {
+      idToken = await fbUser.getIdToken();
+    } catch {}
+
     const account: UserAccount = {
       id: fbUser.uid,
       username: existingProfile.username || fbUser.email?.split('@')[0] || `user_${Date.now()}`,
@@ -100,6 +105,7 @@ export async function signInWithGoogle(): Promise<{
       upiAccounts: existingProfile.upiAccounts || [],
       emailVerified: fbUser.emailVerified,
       authProvider: 'google',
+      idToken: idToken || undefined,
       createdAt: existingProfile.createdAt || new Date().toISOString(),
     };
 
