@@ -31,6 +31,7 @@ import {
   apiSendGroupMessage,
 } from '../utils/api';
 import { sendLocalPushNotification } from '../utils/notifications';
+import { addToOfflineQueue, flushOfflineQueue } from '../utils/offlineQueue';
 
 const getStorageKey = (accountId?: string) =>
   accountId ? `splitshare_state_${accountId}` : 'splitshare_state_anon';
@@ -80,27 +81,33 @@ export function useAppStore(currentAccount: UserAccount | null) {
       return;
     }
 
-    fetchState()
-      .then((res) => {
-        if (res?.data) {
-          (res.data.notifications || []).forEach((n: AppNotification) => {
-            notifiedIdsRef.current.add(n.id);
-          });
-          setState({
-            groups: res.data.groups || [],
-            expenses: res.data.expenses || [],
-            settlements: res.data.settlements || [],
-            kittyContributions: res.data.kittyContributions || [],
-            kittyExpenses: res.data.kittyExpenses || [],
-            invites: res.data.invites || [],
-            notifications: res.data.notifications || [],
-            messages: res.data.messages || [],
-          });
-        }
-      })
-      .catch(() => {
-        // Fallback to local state if server isn't reached immediately
-      });
+    const syncAndRefresh = () => {
+      flushOfflineQueue()
+        .then(() => fetchState())
+        .then((res) => {
+          if (res?.data) {
+            (res.data.notifications || []).forEach((n: AppNotification) => {
+              notifiedIdsRef.current.add(n.id);
+            });
+            setState({
+              groups: res.data.groups || [],
+              expenses: res.data.expenses || [],
+              settlements: res.data.settlements || [],
+              kittyContributions: res.data.kittyContributions || [],
+              kittyExpenses: res.data.kittyExpenses || [],
+              invites: res.data.invites || [],
+              notifications: res.data.notifications || [],
+              messages: res.data.messages || [],
+            });
+          }
+        })
+        .catch(() => {
+          // Fallback to local state if server isn't reached immediately
+        });
+    };
+
+    syncAndRefresh();
+    window.addEventListener('online', syncAndRefresh);
 
     // Real-time live multi-phone synchronization
     const cleanup = connectWebSocket((serverData) => {
@@ -138,7 +145,10 @@ export function useAppStore(currentAccount: UserAccount | null) {
       }
     });
 
-    return cleanup;
+    return () => {
+      cleanup();
+      window.removeEventListener('online', syncAndRefresh);
+    };
   }, [currentAccount?.id]);
 
   useEffect(() => {
@@ -226,8 +236,14 @@ export function useAppStore(currentAccount: UserAccount | null) {
       createdBy: currentUser.id,
     };
 
-    // Call real-time API
-    apiCreateGroup(payload).catch(console.error);
+    // Call real-time API with offline resilience
+    apiCreateGroup(payload)
+      .then((res) => {
+        if (res?.offline) addToOfflineQueue('CREATE_GROUP', payload);
+      })
+      .catch(() => {
+        addToOfflineQueue('CREATE_GROUP', payload);
+      });
 
     const localGroup: Group = {
       ...payload,
@@ -315,7 +331,13 @@ export function useAppStore(currentAccount: UserAccount | null) {
   };
 
   const addExpense = (expenseData: Omit<Expense, 'id' | 'status' | 'approvals'>) => {
-    apiAddExpense(expenseData).catch(console.error);
+    apiAddExpense(expenseData)
+      .then((res) => {
+        if (res?.offline) addToOfflineQueue('ADD_EXPENSE', expenseData);
+      })
+      .catch(() => {
+        addToOfflineQueue('ADD_EXPENSE', expenseData);
+      });
 
     const isApprovalReq = expenseData.requiresApproval;
     const approvals: Record<string, any> = {};
@@ -415,7 +437,13 @@ export function useAppStore(currentAccount: UserAccount | null) {
   };
 
   const recordSettlement = (settlement: Omit<Settlement, 'id' | 'date'>) => {
-    apiRecordSettlement(settlement).catch(console.error);
+    apiRecordSettlement(settlement)
+      .then((res) => {
+        if (res?.offline) addToOfflineQueue('RECORD_SETTLEMENT', settlement);
+      })
+      .catch(() => {
+        addToOfflineQueue('RECORD_SETTLEMENT', settlement);
+      });
 
     const newSettlement: Settlement = {
       ...settlement,
@@ -432,7 +460,14 @@ export function useAppStore(currentAccount: UserAccount | null) {
   };
 
   const addKittyContribution = (contribution: Omit<KittyContribution, 'id' | 'date'>) => {
-    apiAddKittyContribution(contribution).catch(console.error);
+    apiAddKittyContribution(contribution)
+      .then((res) => {
+        if (res?.offline) addToOfflineQueue('ADD_KITTY_CONTRIBUTION', contribution);
+      })
+      .catch(() => {
+        addToOfflineQueue('ADD_KITTY_CONTRIBUTION', contribution);
+      });
+
     const newEntry: KittyContribution = {
       ...contribution,
       id: 'k_' + Date.now(),
@@ -445,7 +480,14 @@ export function useAppStore(currentAccount: UserAccount | null) {
   };
 
   const addKittyExpense = (expense: Omit<KittyExpense, 'id' | 'date'>) => {
-    apiAddKittyExpense(expense).catch(console.error);
+    apiAddKittyExpense(expense)
+      .then((res) => {
+        if (res?.offline) addToOfflineQueue('ADD_KITTY_EXPENSE', expense);
+      })
+      .catch(() => {
+        addToOfflineQueue('ADD_KITTY_EXPENSE', expense);
+      });
+
     const newExpense: KittyExpense = {
       ...expense,
       id: 'ke_' + Date.now(),

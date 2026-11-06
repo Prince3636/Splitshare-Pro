@@ -103,6 +103,19 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
     tone,
   });
 
+  const isMobile = typeof window !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  const handleLaunchClick = (e: React.MouseEvent) => {
+    if (!isMobile) {
+      e.preventDefault();
+      handleCopyUPI();
+      const qrEl = document.getElementById('settle-qr-container');
+      if (qrEl) {
+        qrEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  };
+
   const handleCopyUPI = () => {
     navigator.clipboard.writeText(activeUpiId);
     setCopied(true);
@@ -242,19 +255,35 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
 
           {/* Action 1: 1-Tap UPI Intent Launchers */}
           <div className="space-y-2">
+            {!isMobile && (
+              <div className="p-3 bg-blue-50/80 border border-blue-200/80 rounded-2xl text-left flex items-start gap-2.5">
+                <div className="p-1.5 bg-blue-100 rounded-xl text-blue-700 shrink-0 mt-0.5">
+                  <QrCode size={16} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-blue-950">Desktop Mode Detected</h4>
+                  <p className="text-[11px] text-blue-800 leading-snug mt-0.5">
+                    Open <strong>GPay</strong>, <strong>PhonePe</strong>, or <strong>Paytm</strong> on your phone and scan the QR code below to pay ₹{amount.toLocaleString('en-IN')}.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <a
               href={upiLink}
+              onClick={handleLaunchClick}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98]"
             >
               <Smartphone size={16} className="text-emerald-400" />
-              1-Tap Pay via Any UPI App (Chooser)
+              {isMobile ? '1-Tap Pay via Any UPI App (Chooser)' : 'Copy UPI & Show QR Code'}
             </a>
 
             <div className="grid grid-cols-3 gap-2">
               <a
                 href={gpayLink}
+                onClick={handleLaunchClick}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="py-2 px-2 rounded-xl bg-slate-100 hover:bg-blue-50 border border-slate-200 hover:border-blue-400 text-slate-800 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 text-center"
@@ -263,6 +292,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
               </a>
               <a
                 href={phonepeLink}
+                onClick={handleLaunchClick}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="py-2 px-2 rounded-xl bg-slate-100 hover:bg-purple-50 border border-slate-200 hover:border-purple-400 text-slate-800 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 text-center"
@@ -271,6 +301,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
               </a>
               <a
                 href={paytmLink}
+                onClick={handleLaunchClick}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="py-2 px-2 rounded-xl bg-slate-100 hover:bg-sky-50 border border-slate-200 hover:border-sky-400 text-slate-800 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 text-center"
@@ -281,7 +312,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
           </div>
 
           {/* Action 2: Dynamic QR Code / Custom Barcode Scan */}
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-center">
+          <div id="settle-qr-container" className="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-center scroll-mt-4">
             <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-700 mb-2">
               <QrCode size={16} className="text-emerald-600" />
               Scan {selectedAccount?.label || ''} QR Code

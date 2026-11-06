@@ -1186,6 +1186,24 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`🛡️ SplitShare Production-Hardened Server running on port ${PORT}`);
 });
 
+// Render Free-Tier Anti-Sleep Self-Keepalive (Runs in production to reset 15-minute idle timer)
+const KEEP_ALIVE_URL = process.env.RENDER_EXTERNAL_URL || 'https://splitshare-backend-adzd.onrender.com';
+if (process.env.NODE_ENV === 'production' || process.env.RENDER) {
+  const THIRTEEN_MINUTES = 13 * 60 * 1000;
+  setInterval(async () => {
+    try {
+      const pingUrl = `${KEEP_ALIVE_URL.replace(/\/$/, '')}/api/health`;
+      const res = await fetch(pingUrl);
+      if (res.ok) {
+        console.log(`🛡️ Render keep-alive ping successful: ${new Date().toISOString()}`);
+      }
+    } catch (err: any) {
+      console.warn('🛡️ Render keep-alive ping non-fatal notice:', err?.message || err);
+    }
+  }, THIRTEEN_MINUTES);
+  console.log(`🛡️ Render keep-alive scheduled for ${KEEP_ALIVE_URL}/api/health every 13 minutes.`);
+}
+
 // Process-level Crash Resilience & Graceful Shutdown
 process.on('uncaughtException', (err) => {
   console.error('🛡️ Uncaught Exception intercepted:', err);
